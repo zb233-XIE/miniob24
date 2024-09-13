@@ -2,6 +2,8 @@
 %{
 
 #include <stdio.h>
+#include <time.h>
+#include <string.h>
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
@@ -90,6 +92,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
         STRING_T
         FLOAT_T
         VECTOR_T
+        DATE_T
         HELP
         EXIT
         DOT //QUOTE
@@ -131,12 +134,14 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   char *                                     string;
   int                                        number;
   float                                      floats;
+  char *                                     date;
 }
 
 %token <number> NUMBER
 %token <floats> FLOAT
 %token <string> ID
 %token <string> SSS
+%token <string> DATE
 //非终结符
 
 /** type 定义了各种解析后的结果输出的是什么类型。类型对应了 union 中的定义的成员变量名称 **/
@@ -350,7 +355,7 @@ attr_def:
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
-      $$->length = 4;
+      $$->length = ((AttrType)$2 == AttrType::DATES) ? 8 : 4;
       free($1);
     }
     ;
@@ -362,6 +367,7 @@ type:
     | STRING_T { $$ = static_cast<int>(AttrType::CHARS); }
     | FLOAT_T  { $$ = static_cast<int>(AttrType::FLOATS); }
     | VECTOR_T { $$ = static_cast<int>(AttrType::VECTORS); }
+    | DATE_T   { $$ = static_cast<int>(AttrType::DATES); }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
     INSERT INTO ID VALUES LBRACE value value_list RBRACE 
@@ -406,6 +412,15 @@ value:
     |SSS {
       char *tmp = common::substr($1,1,strlen($1)-2);
       $$ = new Value(tmp);
+      free(tmp);
+      free($1);
+    }
+    |DATE {
+      char *tmp = common::substr($1,1,strlen($1)-2);
+      struct tm tm; bzero(&tm, sizeof(tm));
+      // FIXME: error handling for strptime
+      strptime(tmp, "%Y-%m-%d", &tm);
+      $$ = new Value(mktime(&tm));
       free(tmp);
       free($1);
     }
