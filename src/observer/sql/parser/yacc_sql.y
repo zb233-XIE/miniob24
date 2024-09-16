@@ -53,7 +53,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   return expr;
 }
 
-bool is_valid_date(char *date) {
+bool is_valid_date(const char *date) {
   struct tm tm; bzero(&tm, sizeof(tm));
   char *result = strptime(date, "%Y-%m-%d", &tm);
   if (result == nullptr || *result != '\0') {
@@ -61,7 +61,8 @@ bool is_valid_date(char *date) {
   }
 
   int month2day[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-  if (tm.tm_year % 4 == 0 && tm.tm_mon == 1) {
+  int year = tm.tm_year + 1900;
+  if (((year % 4 == 0 && year % 100 != 0) || year % 400 == 0) && tm.tm_mon == 1) {
     return tm.tm_mday <= 29;
   }
   return tm.tm_mday <= month2day[tm.tm_mon];
