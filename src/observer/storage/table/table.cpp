@@ -476,6 +476,15 @@ RC Table::delete_record(const Record &record)
   return rc;
 }
 
+RC Table::update_record(const Record &record, char *update_data) {
+  // FIXME: any thing about indexes?
+  RC rc = record_handler_->update_record(update_data, &record.rid());
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("fail to update record. table_name: %s", table_meta_.name());
+  }
+  return rc;
+}
+
 RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
 {
   RC rc = RC::SUCCESS;
