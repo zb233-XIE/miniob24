@@ -28,6 +28,8 @@ Value::Value(bool val) { set_boolean(val); }
 
 Value::Value(const char *s, int len /*= 0*/) { set_string(s, len); }
 
+Value::Value(time_t val) { set_date(val); }
+
 Value::Value(const Value &other)
 {
   this->attr_type_ = other.attr_type_;
@@ -125,6 +127,10 @@ void Value::set_data(char *data, int length)
       value_.bool_value_ = *(int *)data != 0;
       length_            = length;
     } break;
+    case AttrType::DATES:{
+      value_.time_value_ = *(time_t *)data;
+      length_ = length;
+    } break;
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);
     } break;
@@ -189,6 +195,9 @@ void Value::set_value(const Value &value)
     } break;
     case AttrType::BOOLEANS: {
       set_boolean(value.get_boolean());
+    } break;
+    case AttrType::DATES:{
+      set_date(value.get_date());
     } break;
     default: {
       ASSERT(false, "got an invalid value type");
@@ -326,4 +335,16 @@ bool Value::get_boolean() const
     }
   }
   return false;
+}
+
+time_t Value::get_date() const {
+  // FIXME: deal with casting issues
+  return value_.time_value_;
+}
+
+void Value::set_date(time_t t) {
+  reset();
+  attr_type_         = AttrType::DATES;
+  value_.time_value_ = t;
+  length_            = sizeof(time_t); 
 }
