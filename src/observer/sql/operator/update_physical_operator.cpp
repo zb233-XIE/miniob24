@@ -31,6 +31,10 @@ RC UpdatePhysicalOperator::open(Trx *trx) {
   for (Record &record: records_) {
     char *updated_data = new char[record.len()];
     memcpy(updated_data, record.data(), record.len());
+    if (field_.type() == AttrType::CHARS) {
+      memset(updated_data + field_.offset(), 0, field_.len());
+    }
+
     memcpy(updated_data + field_.offset(), value_->data(), value_->length());
     rc = trx->update_record(table_, record, updated_data);
     delete [] updated_data;
