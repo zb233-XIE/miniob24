@@ -118,9 +118,53 @@ ComparisonExpr::ComparisonExpr(CompOp comp, unique_ptr<Expression> left, unique_
 
 ComparisonExpr::~ComparisonExpr() {}
 
+bool like_match(const Value &left, const Value &right) {
+  if (left.attr_type() != AttrType::CHARS || right.attr_type() != AttrType::CHARS) {
+    LOG_ERROR("LIKE operator only supports string type");
+    return false;
+  }
+
+  std::string str = left.get_string();
+  std::string pattern = right.get_string();
+
+	int s_len = str.size();
+	int p_len = pattern.size();
+	int s_idx = 0, p_idx = 0;
+	int percentPos = -1;  	  // position of last %
+	int lastMatchPos = 0;     // position of last matched character after %
+
+	while (s_idx < s_len) {
+		if (p_idx < p_len && (pattern[p_idx] == '_' || pattern[p_idx] == str[s_idx])) {
+			p_idx++;
+			s_idx++;
+		} else if (p_idx < p_len && pattern[p_idx] == '%') {
+			percentPos = p_idx;
+			lastMatchPos = s_idx;
+			p_idx++;
+		} else if (percentPos != -1) {
+			p_idx = percentPos + 1;
+			lastMatchPos++;
+			s_idx = lastMatchPos;
+		} else {
+			return false;
+		}
+	}
+
+	while (p_idx < p_len && pattern[p_idx] == '%') {
+		p_idx++;
+	}
+
+	return p_idx == p_len;
+}
+
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC  rc         = RC::SUCCESS;
+  if (comp_ == CompOp::LIKE) {
+    result = like_match(left, right);
+    return rc;
+  }
+
   int cmp_result = left.compare(right);
   result         = false;
   switch (comp_) {
