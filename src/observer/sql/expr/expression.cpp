@@ -119,11 +119,6 @@ ComparisonExpr::ComparisonExpr(CompOp comp, unique_ptr<Expression> left, unique_
 ComparisonExpr::~ComparisonExpr() {}
 
 bool like_match(const Value &left, const Value &right) {
-  if (left.attr_type() != AttrType::CHARS || right.attr_type() != AttrType::CHARS) {
-    LOG_ERROR("LIKE operator only supports string type");
-    return false;
-  }
-
   std::string str = left.get_string();
   std::string pattern = right.get_string();
 
@@ -160,8 +155,12 @@ bool like_match(const Value &left, const Value &right) {
 RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &result) const
 {
   RC  rc         = RC::SUCCESS;
-  if (comp_ == CompOp::LIKE) {
-    result = like_match(left, right);
+  if (comp_ == CompOp::LIKE || comp_ == CompOp::NOT_LIKE) {
+    if (left.attr_type() != AttrType::CHARS || right.attr_type() != AttrType::CHARS) {
+      LOG_ERROR("LIKE operator only supports string type");
+      return RC::INVALID_ARGUMENT;
+    }
+    result = (comp_ == CompOp::LIKE) ? like_match(left, right) : !like_match(left, right);
     return rc;
   }
 
