@@ -53,6 +53,19 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   return expr;
 }
 
+bool is_valid_date(char *date) {
+  struct tm tm; bzero(&tm, sizeof(tm));
+  char *result = strptime(date, "%Y-%m-%d", &tm);
+  if (result == nullptr || *result != '\0') {
+    return false;
+  }
+
+  int month2day[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  if (tm.tm_year % 4 == 0 && tm.tm_mon == 1) {
+    return tm.tm_mday <= 29;
+  }
+  return tm.tm_mday <= month2day[tm.tm_mon];
+}
 %}
 
 %define api.pure full
@@ -417,10 +430,13 @@ value:
     }
     |DATE {
       char *tmp = common::substr($1,1,strlen($1)-2);
-      struct tm tm; bzero(&tm, sizeof(tm));
-      // FIXME: error handling for strptime
-      strptime(tmp, "%Y-%m-%d", &tm);
-      $$ = new Value(mktime(&tm));
+      if (!is_valid_date(tmp)) {
+        $$ = new Value(AttrType::UNDEFINED, nullptr);
+      } else {
+        struct tm tm; bzero(&tm, sizeof(tm));
+        strptime(tmp, "%Y-%m-%d", &tm);
+        $$ = new Value(mktime(&tm));
+      }
       free(tmp);
       free($1);
     }
