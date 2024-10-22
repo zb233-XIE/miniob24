@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <numeric>
 #include <string.h>
 
 #include "common/lang/comparator.h"
@@ -89,24 +90,41 @@ private:
 class KeyComparator
 {
 public:
-  void init(AttrType type, int length) { attr_comparator_.init(type, length); }
+  void init(AttrType type, int len) {
+    attr_comparators_ = std::vector<AttrComparator>(1);
+    attr_comparators_[0].init(type, len);
+  }
 
-  const AttrComparator &attr_comparator() const { return attr_comparator_; }
+  void init(AttrType types[], int lens[], int attr_count) {
+    attr_comparators_ = std::vector<AttrComparator>(attr_count);
+
+    for (int i = 0; i < attr_count; ++i) {
+      attr_comparators_[i].init(types[i], lens[i]);
+      total_attr_len_ += lens[i];
+    }
+  }
+
+  const std::vector<AttrComparator> &attr_comparators() const { return attr_comparators_; }
 
   int operator()(const char *v1, const char *v2) const
   {
-    int result = attr_comparator_(v1, v2);
-    if (result != 0) {
-      return result;
+    for (size_t i = 0; i < attr_comparators_.size(); ++i) {
+      int result = attr_comparators_[i](v1, v2);
+      if (result != 0) {
+        return result;
+      }
+      v1 += attr_comparators_[i].attr_length();
+      v2 += attr_comparators_[i].attr_length();
     }
 
-    const RID *rid1 = (const RID *)(v1 + attr_comparator_.attr_length());
-    const RID *rid2 = (const RID *)(v2 + attr_comparator_.attr_length());
+    const RID *rid1 = (const RID *)(v1 + total_attr_len_);
+    const RID *rid2 = (const RID *)(v2 + total_attr_len_);
     return RID::compare(rid1, rid2);
   }
 
 private:
-  AttrComparator attr_comparator_;
+  std::vector<AttrComparator> attr_comparators_;
+  int total_attr_len_ = 0;
 };
 
 /**
@@ -142,51 +160,77 @@ private:
 class KeyPrinter
 {
 public:
-  void init(AttrType type, int length) { attr_printer_.init(type, length); }
+  void init(AttrType types[], int lens[], int attr_count) {
+    attr_printers_ = std::vector<AttrPrinter>(attr_count);
 
-  const AttrPrinter &attr_printer() const { return attr_printer_; }
+    for (int i = 0; i < attr_count; ++i) {
+      attr_printers_[i].init(types[i], lens[i]);
+    }
+  }
+
+  const std::vector<AttrPrinter> &attr_printers() const { return attr_printers_; }
 
   string operator()(const char *v) const
   {
     stringstream ss;
-    ss << "{key:" << attr_printer_(v) << ",";
+    ss << "{key:";
 
-    const RID *rid = (const RID *)(v + attr_printer_.attr_length());
-    ss << "rid:{" << rid->to_string() << "}}";
+    for (size_t i = 0; i < attr_printers_.size(); ++i) {
+      ss << attr_printers_[i](v);
+      if (i < attr_printers_.size() - 1) {
+        ss << ",";
+      }
+      v += attr_printers_[i].attr_length();
+    }
+
+    const RID *rid = (const RID *)(v);
+    ss << ",rid:{" << rid->to_string() << "}}";
     return ss.str();
   }
 
 private:
-  AttrPrinter attr_printer_;
+  std::vector<AttrPrinter> attr_printers_;
 };
 
 /**
  * @brief the meta information of bplus tree
  * @ingroup BPlusTree
  * @details this is the first page of bplus tree.
- * only one field can be supported, can you extend it to multi-fields?
+ * supports multiple fields.
  */
 struct IndexFileHeader
 {
+  static const int MAX_ATTR_COUNT = 5;
   IndexFileHeader()
   {
     memset(this, 0, sizeof(IndexFileHeader));
     root_page = BP_INVALID_PAGE_NUM;
   }
-  PageNum  root_page;          ///< 根节点在磁盘中的页号
-  int32_t  internal_max_size;  ///< 内部节点最大的键值对数
-  int32_t  leaf_max_size;      ///< 叶子节点最大的键值对数
-  int32_t  attr_length;        ///< 键值的长度
-  int32_t  key_length;         ///< attr length + sizeof(RID)
-  AttrType attr_type;          ///< 键值的类型
+
+  PageNum  root_page;                  ///< 根节点在磁盘中的页号
+  int32_t  internal_max_size;          ///< 内部节点最大的键值对数
+  int32_t  leaf_max_size;              ///< 叶子节点最大的键值对数
+  int32_t  total_attr_length;          ///< 所有键值的总长度
+  int32_t  key_length;                 ///< total_attr_length + sizeof(RID)
+  int32_t  attr_count;                 ///< 属性的数量
+  AttrType attr_types[MAX_ATTR_COUNT]; ///< 键值的类型数组
+  int32_t  attr_lens[MAX_ATTR_COUNT];  ///< 键值的长度数组
 
   const string to_string() const
   {
     stringstream ss;
 
-    ss << "attr_length:" << attr_length << ","
+    ss << "total_attr_length:" << total_attr_length << ","
        << "key_length:" << key_length << ","
-       << "attr_type:" << attr_type_to_string(attr_type) << ","
+       << "attr_count:" << attr_count << ","
+       << "attr_types:[";
+    for (int i = 0; i < attr_count; ++i) {
+      ss << attr_type_to_string(attr_types[i]);
+      if (i < attr_count - 1) {
+        ss << ",";
+      }
+    }
+    ss << "],"
        << "root_page:" << root_page << ","
        << "internal_max_size:" << internal_max_size << ","
        << "leaf_max_size:" << leaf_max_size << ";";
@@ -454,14 +498,18 @@ public:
    * @param log_handler 记录日志
    * @param bpm 缓冲池管理器
    * @param file_name 文件名
-   * @param attr_type 属性类型
-   * @param attr_length 属性长度
+   * @param types 属性类型数组
+   * @param total_attr_len 属性总长度
    * @param internal_max_size 内部节点最大大小
    * @param leaf_max_size 叶子节点最大大小
    */
   RC create(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, AttrType attr_type, int attr_length,
       int internal_max_size = -1, int leaf_max_size = -1);
   RC create(LogHandler &log_handler, DiskBufferPool &buffer_pool, AttrType attr_type, int attr_length,
+      int internal_max_size = -1, int leaf_max_size = -1);
+  RC create(LogHandler &log_handler, BufferPoolManager &bpm, const char *file_name, const std::vector<AttrType> &types,
+            const std::vector<int> &lens, int internal_max_size = -1, int leaf_max_size = -1);
+  RC create(LogHandler &log_handler, DiskBufferPool &buffer_pool, const std::vector<AttrType> &types, const std::vector<int> &lens,
       int internal_max_size = -1, int leaf_max_size = -1);
 
   /**
