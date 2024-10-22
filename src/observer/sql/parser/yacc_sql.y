@@ -181,6 +181,7 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
+%nonassoc EQ LT GT LE GE NE
 %left '+' '-'
 %left '*' '/'
 %nonassoc UMINUS
@@ -599,7 +600,7 @@ condition_list:
     }
     ;
 condition:
-    rel_attr comp_op value
+    /* rel_attr comp_op value
     {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 1;
@@ -646,6 +647,15 @@ condition:
 
       delete $1;
       delete $3;
+    }
+    | */
+    expression comp_op expression// 6. where语句中会出现表达式
+    {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->left_expr = $1;
+      $$->right_expr = $3;
+      $$->comp = $2;
     }
     ;
 

@@ -171,7 +171,8 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
     Field      field(table, field_meta);
     FieldExpr *field_expr = new FieldExpr(field);
-    field_expr->set_name(field_name);
+    // field_expr->set_name(field_name); // expression的测试用例显示应该展示完整的名字，而不只是field_name
+    field_expr->set_name(unbound_field_expr->name());
     bound_expressions.emplace_back(field_expr);
   }
 
@@ -327,7 +328,8 @@ RC ExpressionBinder::bind_arithmetic_expression(
   }
 
   if (child_bound_expressions.size() != 1) {
-    LOG_WARN("invalid left children number of comparison expression: %d", child_bound_expressions.size());
+    // LOG_WARN("invalid left children number of comparison expression: %d", child_bound_expressions.size());
+    LOG_WARN("invalid left children number of arithmetic expression: %d", child_bound_expressions.size());
     return RC::INVALID_ARGUMENT;
   }
 
@@ -343,8 +345,13 @@ RC ExpressionBinder::bind_arithmetic_expression(
   }
 
   if (child_bound_expressions.size() != 1) {
-    LOG_WARN("invalid right children number of comparison expression: %d", child_bound_expressions.size());
-    return RC::INVALID_ARGUMENT;
+    if (arithmetic_expr->arithmetic_type() != ArithmeticExpr::Type::NEGATIVE) {
+      // LOG_WARN("invalid right children number of comparison expression: %d", child_bound_expressions.size());
+      LOG_WARN("invalid left children number of arithmetic expression: %d", child_bound_expressions.size());
+      return RC::INVALID_ARGUMENT;
+    }
+    bound_expressions.emplace_back(std::move(expr));
+    return RC::SUCCESS;
   }
 
   unique_ptr<Expression> &right = child_bound_expressions[0];

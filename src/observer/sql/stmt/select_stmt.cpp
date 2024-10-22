@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include "sql/parser/expression_binder.h"
+#include <memory>
 
 using namespace std;
 using namespace common;
@@ -72,6 +73,21 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return rc;
     }
   }
+
+  // 6. 绑定select_sql.conditions中的表达式
+  for (ConditionSqlNode &condition : select_sql.conditions) {
+    if (condition.neither) {
+      vector<unique_ptr<Expression>> left_bound_expressions;
+      vector<unique_ptr<Expression>> right_bound_expressions;
+      std::unique_ptr<Expression> left_expr = std::unique_ptr<Expression>(condition.left_expr);
+      std::unique_ptr<Expression> right_expr = std::unique_ptr<Expression>(condition.right_expr);
+      expression_binder.bind_expression(left_expr, left_bound_expressions);
+      expression_binder.bind_expression(right_expr, right_bound_expressions);
+      condition.left_expr = left_bound_expressions[0].release();
+      condition.right_expr = right_bound_expressions[0].release();
+    }
+  }
+
 
   vector<unique_ptr<Expression>> group_by_expressions;
   for (unique_ptr<Expression> &expression : select_sql.group_by) {

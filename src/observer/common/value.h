@@ -57,32 +57,57 @@ public:
 
   static RC add(const Value &left, const Value &right, Value &result)
   {
-    return DataType::type_instance(result.attr_type())->add(left, right, result);
+    RC rc = DataType::type_instance(result.attr_type())->add(left, right, result);
+    if (left.get_null() || right.get_null()) {
+      result.set_null();
+    }
+    return rc;
   }
 
   static RC subtract(const Value &left, const Value &right, Value &result)
   {
-    return DataType::type_instance(result.attr_type())->subtract(left, right, result);
+    RC rc = DataType::type_instance(result.attr_type())->subtract(left, right, result);
+    if (left.get_null() || right.get_null()) {
+      result.set_null();
+    }
+    return rc;
   }
 
   static RC multiply(const Value &left, const Value &right, Value &result)
   {
-    return DataType::type_instance(result.attr_type())->multiply(left, right, result);
+    RC rc = DataType::type_instance(result.attr_type())->multiply(left, right, result);
+    if (left.get_null() || right.get_null()) {
+      result.set_null();
+    }
+    return rc;
   }
 
   static RC divide(const Value &left, const Value &right, Value &result)
   {
-    return DataType::type_instance(result.attr_type())->divide(left, right, result);
+    RC rc = DataType::type_instance(result.attr_type())->divide(left, right, result);
+    if (left.get_null() || right.get_null()) {
+      result.set_null();
+    }
+    return rc;
   }
 
   static RC negative(const Value &value, Value &result)
   {
-    return DataType::type_instance(result.attr_type())->negative(value, result);
+    RC rc = DataType::type_instance(result.attr_type())->negative(value, result);
+    if (value.get_null()) {
+      result.set_null();
+    }
+    return rc;
   }
 
   static RC cast_to(const Value &value, AttrType to_type, Value &result)
   {
-    return DataType::type_instance(value.attr_type())->cast_to(value, to_type, result);
+
+    RC rc = DataType::type_instance(value.attr_type())->cast_to(value, to_type, result);
+    if (value.get_null()) {
+      result.set_null();
+    }
+    return rc;
   }
 
   void set_type(AttrType type) { this->attr_type_ = type; }
@@ -90,6 +115,7 @@ public:
   void set_data(const char *data, int length) { this->set_data(const_cast<char *>(data), length); }
   void set_value(const Value &value);
   void set_boolean(bool val);
+  void set_null() { this->is_null_ = 1; }
 
   string to_string() const;
 
@@ -109,6 +135,7 @@ public:
   float  get_float() const;
   string get_string() const;
   bool   get_boolean() const;
+  int    get_null() const { return is_null_; };
 
 private:
   void set_int(int val);
@@ -119,6 +146,7 @@ private:
 private:
   AttrType attr_type_ = AttrType::UNDEFINED;
   int      length_    = 0;
+  int      is_null_   = 0;
 
   union Val
   {

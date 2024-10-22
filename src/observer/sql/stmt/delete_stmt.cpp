@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "sql/parser/expression_binder.h"
 
 DeleteStmt::DeleteStmt(Table *table, FilterStmt *filter_stmt) : table_(table), filter_stmt_(filter_stmt) {}
 
@@ -28,7 +29,7 @@ DeleteStmt::~DeleteStmt()
   }
 }
 
-RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
+RC DeleteStmt::create(Db *db, DeleteSqlNode &delete_sql, Stmt *&stmt)
 {
   const char *table_name = delete_sql.relation_name.c_str();
   if (nullptr == db || nullptr == table_name) {
@@ -45,6 +46,26 @@ RC DeleteStmt::create(Db *db, const DeleteSqlNode &delete_sql, Stmt *&stmt)
 
   std::unordered_map<std::string, Table *> table_map;
   table_map.insert(std::pair<std::string, Table *>(std::string(table_name), table));
+
+  // 6. 绑定delete_sql.conditions中的表达式
+  BinderContext binder_context;
+  binder_context.add_table(table);
+
+  vector<unique_ptr<Expression>> bound_expressions;
+  ExpressionBinder               expression_binder(binder_context);
+
+  for (ConditionSqlNode &condition : delete_sql.conditions) {
+    if (condition.neither) {
+      vector<unique_ptr<Expression>> left_bound_expressions;
+      vector<unique_ptr<Expression>> right_bound_expressions;
+      std::unique_ptr<Expression>    left_expr  = std::unique_ptr<Expression>(condition.left_expr);
+      std::unique_ptr<Expression>    right_expr = std::unique_ptr<Expression>(condition.right_expr);
+      expression_binder.bind_expression(left_expr, left_bound_expressions);
+      expression_binder.bind_expression(right_expr, right_bound_expressions);
+      condition.left_expr  = left_bound_expressions[0].release();
+      condition.right_expr = right_bound_expressions[0].release();
+    }
+  }
 
   FilterStmt *filter_stmt = nullptr;
   RC          rc          = FilterStmt::create(
