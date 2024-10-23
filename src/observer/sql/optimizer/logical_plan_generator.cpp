@@ -153,6 +153,10 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     project_oper->add_child(std::move(*last_oper));
   }
 
+  if (tables.size() > 1) {
+    project_oper->set_multi_tables_flag();
+  }
+
   logical_operator = std::move(project_oper);
   return RC::SUCCESS;
 }

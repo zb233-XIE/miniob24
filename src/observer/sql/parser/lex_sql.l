@@ -134,9 +134,14 @@ GROUP                                   RETURN_TOKEN(GROUP);
 BY                                      RETURN_TOKEN(BY);
 STORAGE                                 RETURN_TOKEN(STORAGE);
 FORMAT                                  RETURN_TOKEN(FORMAT);
+MAX                                     RETURN_TOKEN(MAX);
+MIN                                     RETURN_TOKEN(MIN);
+COUNT                                   RETURN_TOKEN(COUNT);
+AVG                                     RETURN_TOKEN(AVG);
+SUM                                     RETURN_TOKEN(SUM);
 LIKE                                    RETURN_TOKEN(LK);
 "NOT LIKE"                              RETURN_TOKEN(NLK);
-{ID}                                    last_flag=0;yylval->string=strdup(yytext); RETURN_TOKEN(ID);
+{ID}                                    last_flag=1;yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     last_flag=1;RETURN_TOKEN(RBRACE);
 

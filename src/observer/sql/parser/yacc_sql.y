@@ -22,9 +22,9 @@ string token_name(const char *sql_string, YYLTYPE *llocp)
   return string(sql_string + llocp->first_column, llocp->last_column - llocp->first_column + 1);
 }
 
-int yyerror(YYLTYPE *llocp, const char *sql_string, ParsedSqlResult *sql_result, yyscan_t scanner, const char *msg)
+int yyerror(YYLTYPE *llocp, const char *sql_string, ParsedSqlResult *sql_result, yyscan_t scanner, SqlCommandFlag flag, const char *msg)
 {
-  std::unique_ptr<ParsedSqlNode> error_sql_node = std::make_unique<ParsedSqlNode>(SCF_ERROR);
+  std::unique_ptr<ParsedSqlNode> error_sql_node = std::make_unique<ParsedSqlNode>(flag);
   error_sql_node->error.error_msg = msg;
   error_sql_node->error.line = llocp->first_line;
   error_sql_node->error.column = llocp->first_column;
@@ -78,6 +78,7 @@ bool is_valid_date(const char *date) {
 %parse-param { const char * sql_string }
 %parse-param { ParsedSqlResult * sql_result }
 %parse-param { void * scanner }
+%parse-param { SqlCommandFlag flag }
 
 //标识tokens
 %token  SEMICOLON
@@ -131,6 +132,11 @@ bool is_valid_date(const char *date) {
         NE
         LK
         NLK
+        MAX
+        MIN
+        COUNT
+        AVG
+        SUM
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -143,6 +149,7 @@ bool is_valid_date(const char *date) {
   AttrInfoSqlNode *                          attr_info;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
+  // std::vector<Expression *> *                agg_fun_attr_list;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
@@ -168,6 +175,8 @@ bool is_valid_date(const char *date) {
 %type <string>              relation
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
+%type <expression>          agg_fun_attr
+%type <expression>          agg_fun_attr_list
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <value_list>          value_list
@@ -568,6 +577,57 @@ expression:
       $$ = new StarExpr();
     }
     // your code here
+    // 聚合函数
+    | MAX LBRACE agg_fun_attr_list RBRACE {
+      $$ = create_aggregate_expression("max", $3, sql_string, &@$);
+    }
+    | MIN LBRACE agg_fun_attr_list RBRACE {
+      $$ = create_aggregate_expression("min", $3, sql_string, &@$);
+    }
+    | COUNT LBRACE agg_fun_attr_list RBRACE {
+      $$ = create_aggregate_expression("count", $3, sql_string, &@$);
+    }
+    | AVG LBRACE agg_fun_attr_list RBRACE {
+      $$ = create_aggregate_expression("avg", $3, sql_string, &@$);
+    }
+    | SUM LBRACE agg_fun_attr_list RBRACE {
+      $$ = create_aggregate_expression("avg", $3, sql_string, &@$);
+    }
+    ;
+agg_fun_attr_list:
+    agg_fun_attr {
+      $$ = $1;
+    }
+    | agg_fun_attr COMMA agg_fun_attr_list {
+      $$ = nullptr;
+      // 到这里肯定有问题
+      if ($3) {
+        delete $3;
+      }
+      if ($1) {
+        delete $1;
+      }
+      yyerror(&@1, NULL, sql_result, NULL, SCF_ERROR_AGGREGATION, "aggregation func has too many fields");
+    }
+    ;
+agg_fun_attr:
+    /* empty */
+    {
+      std::string null_string = "";
+      $$ = new UnboundFieldExpr(null_string, null_string);
+      $$->set_name(null_string);
+    }
+    | '*' {
+      $$ = new StarExpr();
+    }
+    | ID {
+      RelAttrSqlNode *node = new RelAttrSqlNode;
+      node->attribute_name = $1;
+      $$ = new UnboundFieldExpr(node->relation_name, node->attribute_name);
+      $$->set_name(token_name(sql_string, &@$));
+      delete node;
+      free($1);
+    }
     ;
 
 rel_attr:
@@ -754,7 +814,7 @@ int sql_parse(const char *s, ParsedSqlResult *sql_result) {
   yyscan_t scanner;
   yylex_init(&scanner);
   scan_string(s, scanner);
-  int result = yyparse(s, sql_result, scanner);
+  int result = yyparse(s, sql_result, scanner, SCF_ERROR);
   yylex_destroy(scanner);
   return result;
 }

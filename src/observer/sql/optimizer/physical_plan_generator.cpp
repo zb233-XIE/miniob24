@@ -240,6 +240,10 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
     project_operator->add_child(std::move(child_phy_oper));
   }
 
+  if (project_oper.get_multi_tables_flag()) {
+    project_operator->set_multi_tables_flag();
+  }
+
   oper = std::move(project_operator);
 
   LOG_TRACE("create a project physical operator");

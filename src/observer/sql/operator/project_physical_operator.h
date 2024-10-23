@@ -40,7 +40,11 @@ public:
 
   RC tuple_schema(TupleSchema &schema) const override;
 
+  void set_multi_tables_flag() { multi_tables_flag_ = 1; }
+  int get_multi_tables_flag() const { return multi_tables_flag_; }
+
 private:
   std::vector<std::unique_ptr<Expression>>     expressions_;
   ExpressionTuple<std::unique_ptr<Expression>> tuple_;
+  int multi_tables_flag_ = 0;
 };

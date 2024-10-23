@@ -100,12 +100,17 @@ extern int yydebug;
     NE = 306,
     LK = 307,
     NLK = 308,
-    NUMBER = 309,
-    FLOAT = 310,
-    ID = 311,
-    SSS = 312,
-    DATE = 313,
-    UMINUS = 314
+    MAX = 309,
+    MIN = 310,
+    COUNT = 311,
+    AVG = 312,
+    SUM = 313,
+    NUMBER = 314,
+    FLOAT = 315,
+    ID = 316,
+    SSS = 317,
+    DATE = 318,
+    UMINUS = 319
   };
 #endif
 
@@ -113,7 +118,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 136 "yacc_sql.y"
+#line 142 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -124,6 +129,7 @@ union YYSTYPE
   AttrInfoSqlNode *                          attr_info;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
+  // std::vector<Expression *> *                agg_fun_attr_list;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
@@ -133,7 +139,7 @@ union YYSTYPE
   float                                      floats;
   char *                                     date;
 
-#line 137 "yacc_sql.hpp"
+#line 143 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
@@ -157,6 +163,6 @@ struct YYLTYPE
 
 
 
-int yyparse (const char * sql_string, ParsedSqlResult * sql_result, void * scanner);
+int yyparse (const char * sql_string, ParsedSqlResult * sql_result, void * scanner, SqlCommandFlag flag);
 
 #endif /* !YY_YY_YACC_SQL_HPP_INCLUDED  */

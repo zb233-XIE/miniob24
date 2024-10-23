@@ -36,4 +36,10 @@ public:
 
   std::vector<std::unique_ptr<Expression>>       &expressions() { return expressions_; }
   const std::vector<std::unique_ptr<Expression>> &expressions() const { return expressions_; }
+
+  void set_multi_tables_flag() { multi_tables_flag_ = 1; }
+  int get_multi_tables_flag() const { return multi_tables_flag_; }
+
+private:
+  int multi_tables_flag_ = 0;
 };
