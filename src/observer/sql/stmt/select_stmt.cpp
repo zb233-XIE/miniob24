@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/select_stmt.h"
 #include "common/lang/string.h"
 #include "common/log/log.h"
+#include "common/rc.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
@@ -76,13 +77,22 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
 
   // 6. 绑定select_sql.conditions中的表达式
   for (ConditionSqlNode &condition : select_sql.conditions) {
+    RC rc = RC::SUCCESS;
     if (condition.neither) {
       vector<unique_ptr<Expression>> left_bound_expressions;
       vector<unique_ptr<Expression>> right_bound_expressions;
       std::unique_ptr<Expression> left_expr = std::unique_ptr<Expression>(condition.left_expr);
       std::unique_ptr<Expression> right_expr = std::unique_ptr<Expression>(condition.right_expr);
-      expression_binder.bind_expression(left_expr, left_bound_expressions);
-      expression_binder.bind_expression(right_expr, right_bound_expressions);
+      rc = expression_binder.bind_expression(left_expr, left_bound_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+      rc = expression_binder.bind_expression(right_expr, right_bound_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
       condition.left_expr = left_bound_expressions[0].release();
       condition.right_expr = right_bound_expressions[0].release();
     }

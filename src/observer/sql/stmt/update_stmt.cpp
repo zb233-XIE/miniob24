@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
+#include "sql/parser/expression_binder.h"
 
 UpdateStmt::UpdateStmt(Table *table, Value *value, FilterStmt *filter_stmt, const FieldMeta &field):
   table_(table), value_(value), filter_stmt_(filter_stmt), update_field_(field) {}
@@ -33,7 +34,7 @@ UpdateStmt::~UpdateStmt() {
   }
 }
 
-RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
+RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
 {
   const char *table_name = update.relation_name.c_str();
   if (db == nullptr || table_name == nullptr || update.value.attr_type() == AttrType::UNDEFINED) {
@@ -71,6 +72,35 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     LOG_WARN("value used to update record type %d does not match field `%s` type %d",
       update.value.attr_type(), update_field->name(), update_field->type());
     return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+  }
+
+  // 6. 绑定upadte.conditions中的表达式
+  BinderContext binder_context;
+  binder_context.add_table(table);
+
+  vector<unique_ptr<Expression>> bound_expressions;
+  ExpressionBinder               expression_binder(binder_context);
+
+  for (ConditionSqlNode &condition : update.conditions) {
+    RC rc = RC::SUCCESS;
+    if (condition.neither) {
+      vector<unique_ptr<Expression>> left_bound_expressions;
+      vector<unique_ptr<Expression>> right_bound_expressions;
+      std::unique_ptr<Expression>    left_expr  = std::unique_ptr<Expression>(condition.left_expr);
+      std::unique_ptr<Expression>    right_expr = std::unique_ptr<Expression>(condition.right_expr);
+      rc = expression_binder.bind_expression(left_expr, left_bound_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+      rc = expression_binder.bind_expression(right_expr, right_bound_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+      condition.left_expr  = left_bound_expressions[0].release();
+      condition.right_expr = right_bound_expressions[0].release();
+    }
   }
 
   std::unordered_map<std::string, Table *> table_map;

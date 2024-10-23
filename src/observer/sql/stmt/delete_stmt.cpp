@@ -55,13 +55,22 @@ RC DeleteStmt::create(Db *db, DeleteSqlNode &delete_sql, Stmt *&stmt)
   ExpressionBinder               expression_binder(binder_context);
 
   for (ConditionSqlNode &condition : delete_sql.conditions) {
+    RC rc = RC::SUCCESS;
     if (condition.neither) {
       vector<unique_ptr<Expression>> left_bound_expressions;
       vector<unique_ptr<Expression>> right_bound_expressions;
       std::unique_ptr<Expression>    left_expr  = std::unique_ptr<Expression>(condition.left_expr);
       std::unique_ptr<Expression>    right_expr = std::unique_ptr<Expression>(condition.right_expr);
-      expression_binder.bind_expression(left_expr, left_bound_expressions);
-      expression_binder.bind_expression(right_expr, right_bound_expressions);
+      rc = expression_binder.bind_expression(left_expr, left_bound_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+      rc = expression_binder.bind_expression(right_expr, right_bound_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
       condition.left_expr  = left_bound_expressions[0].release();
       condition.right_expr = right_bound_expressions[0].release();
     }
