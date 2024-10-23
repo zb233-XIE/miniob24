@@ -46,6 +46,7 @@ public:
   explicit Value(float val);
   explicit Value(bool val);
   explicit Value(const char *s, int len = 0);
+  explicit Value(time_t val);
 
   Value(const Value &other);
   Value(Value &&other);
@@ -136,12 +137,14 @@ public:
   string get_string() const;
   bool   get_boolean() const;
   int    get_null() const { return is_null_; };
+  time_t get_date() const;
 
 private:
   void set_int(int val);
   void set_float(float val);
   void set_string(const char *s, int len = 0);
   void set_string_from_other(const Value &other);
+  void set_date(time_t t);
 
 private:
   AttrType attr_type_ = AttrType::UNDEFINED;
@@ -154,6 +157,7 @@ private:
     float   float_value_;
     bool    bool_value_;
     char   *pointer_value_;
+    time_t  time_value_;
   } value_ = {.int_value_ = 0};
 
   /// 是否申请并占有内存, 目前对于 CHARS 类型 own_data_ 为true, 其余类型 own_data_ 为false

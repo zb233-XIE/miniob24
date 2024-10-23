@@ -27,6 +27,7 @@ while (0);
 %{
 #include<string.h>
 #include<stdio.h>
+#include<time.h>
 
 /**
  * flex 代码包含三个部分，使用 %% 分隔
@@ -91,6 +92,7 @@ QUOTE            [\'\"]
                                           }\
                                         }
 [\-]?{DIGIT}+{DOT}{DIGIT}+              yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
+{QUOTE}{DIGIT}\-{DIGIT}+\-{DIGIT}+{QUOTE} yylval->date=strdup(yytext); RETURN_TOKEN(DATE);
 
 ";"                                     last_flag=0;RETURN_TOKEN(SEMICOLON);
 {DOT}                                   RETURN_TOKEN(DOT);
@@ -122,6 +124,7 @@ ROLLBACK                                last_flag=0;RETURN_TOKEN(TRX_ROLLBACK);
 INT                                     RETURN_TOKEN(INT_T);
 CHAR                                    RETURN_TOKEN(STRING_T);
 FLOAT                                   RETURN_TOKEN(FLOAT_T);
+DATE                                    RETURN_TOKEN(DATE_T);
 VECTOR                                  RETURN_TOKEN(VECTOR_T);
 LOAD                                    RETURN_TOKEN(LOAD);
 DATA                                    RETURN_TOKEN(DATA);
@@ -131,7 +134,9 @@ GROUP                                   RETURN_TOKEN(GROUP);
 BY                                      RETURN_TOKEN(BY);
 STORAGE                                 RETURN_TOKEN(STORAGE);
 FORMAT                                  RETURN_TOKEN(FORMAT);
-{ID}                                    last_flag=1;yylval->string=strdup(yytext); RETURN_TOKEN(ID);
+LIKE                                    RETURN_TOKEN(LK);
+"NOT LIKE"                              RETURN_TOKEN(NLK);
+{ID}                                    last_flag=0;yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
 ")"                                     last_flag=1;RETURN_TOKEN(RBRACE);
 
