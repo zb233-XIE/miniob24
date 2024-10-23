@@ -143,27 +143,23 @@ RC FieldMeta::from_json(const Json::Value &json_value, FieldMeta &field)
 std::string FieldMeta::metas_to_str(const std::vector<FieldMeta> &fields)
 {
   std::stringstream ss;
-  ss << "[";
   for (size_t i = 0; i < fields.size(); ++i) {
     ss << fields[i].name();
     if (i != fields.size() - 1) {
       ss << ", ";
     }
   }
-  ss << "]";
   return ss.str();
 }
 
 std::string FieldMeta::attrs_to_str(const std::vector<std::string> &attrs)
 {
   std::stringstream ss;
-  ss << "[";
   for (size_t i = 0; i < attrs.size(); ++i) {
     ss << attrs[i];
     if (i != attrs.size() - 1) {
       ss << ", ";
     }
   }
-  ss << "]";
   return ss.str();
 }
