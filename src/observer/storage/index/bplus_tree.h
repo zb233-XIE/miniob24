@@ -108,13 +108,14 @@ public:
 
   int operator()(const char *v1, const char *v2) const
   {
+    const char *p1 = v1, *p2 = v2;
     for (size_t i = 0; i < attr_comparators_.size(); ++i) {
-      int result = attr_comparators_[i](v1, v2);
+      int result = attr_comparators_[i](p1, p2);
       if (result != 0) {
         return result;
       }
-      v1 += attr_comparators_[i].attr_length();
-      v2 += attr_comparators_[i].attr_length();
+      p1 += attr_comparators_[i].attr_length();
+      p2 += attr_comparators_[i].attr_length();
     }
 
     const RID *rid1 = (const RID *)(v1 + total_attr_len_);
