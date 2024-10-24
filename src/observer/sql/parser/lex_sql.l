@@ -110,6 +110,8 @@ SYNC                                    last_flag=0;RETURN_TOKEN(SYNC);
 SELECT                                  last_flag=0;RETURN_TOKEN(SELECT);
 CALC                                    last_flag=0;RETURN_TOKEN(CALC);
 FROM                                    last_flag=0;RETURN_TOKEN(FROM);
+INNER                                   RETURN_TOKEN(INNER);
+JOIN                                    RETURN_TOKEN(JOIN);
 WHERE                                   last_flag=0;RETURN_TOKEN(WHERE);
 AND                                     last_flag=0;RETURN_TOKEN(AND);
 INSERT                                  last_flag=0;RETURN_TOKEN(INSERT);

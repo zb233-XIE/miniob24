@@ -40,7 +40,8 @@ static void wildcard_fields(Table *table, vector<unique_ptr<Expression>> &expres
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
     Field      field(table, table_meta.field(i));
     FieldExpr *field_expr = new FieldExpr(field);
-    field_expr->set_name(field.field_name());
+    // field_expr->set_name(field.field_name());
+    field_expr->set_name(table_meta.name() + std::string(".") + std::string(field.field_name()));
     expressions.emplace_back(field_expr);
   }
 }

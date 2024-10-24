@@ -31,6 +31,10 @@ SelectStmt::~SelectStmt()
     delete filter_stmt_;
     filter_stmt_ = nullptr;
   }
+  for (FilterStmt *filter_stmt : join_filter_stmts_) {
+    delete filter_stmt;
+    filter_stmt = nullptr;
+  }
 }
 
 RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
@@ -47,6 +51,34 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   unordered_map<string, Table *> table_map;
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
     const char *table_name = select_sql.relations[i].c_str();
+    if (nullptr == table_name) {
+      LOG_WARN("invalid argument. relation name is null. index=%d", i);
+      return RC::INVALID_ARGUMENT;
+    }
+
+    Table *table = db->find_table(table_name);
+    if (nullptr == table) {
+      LOG_WARN("no such table. db=%s, table_name=%s", db->name(), table_name);
+      return RC::SCHEMA_TABLE_NOT_EXIST;
+    }
+
+    binder_context.add_table(table);
+    tables.push_back(table);
+    table_map.insert({table_name, table});
+  }
+
+  // debug
+  // for (size_t i = 0; i < select_sql.join_relations.size(); i ++) {
+  //   std::cout << select_sql.join_relations[i] << std::endl;
+  // }
+  // for (size_t i = 0; i < select_sql.join_conditions.size(); i ++) {
+  //   auto &ele = select_sql.join_conditions[i];
+  //   std::cout << ele->size() << std::endl;
+  // }
+
+  // 将join语句中的表也加入到tables和table_map中，依葫芦画瓢
+  for (size_t i = 0; i < select_sql.join_conditions.size(); i ++) {
+    const char *table_name = select_sql.join_relations[i].c_str();
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
@@ -98,6 +130,31 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     }
   }
 
+  // 9. 绑定select_sql.join_conditions中的表达式
+  for (std::vector<ConditionSqlNode> *conditions : select_sql.join_conditions) {
+    for (ConditionSqlNode &condition : *conditions) {
+      RC rc = RC::SUCCESS;
+      if (condition.neither) {
+        vector<unique_ptr<Expression>> left_bound_expressions;
+        vector<unique_ptr<Expression>> right_bound_expressions;
+        std::unique_ptr<Expression>    left_expr  = std::unique_ptr<Expression>(condition.left_expr);
+        std::unique_ptr<Expression>    right_expr = std::unique_ptr<Expression>(condition.right_expr);
+        rc = expression_binder.bind_expression(left_expr, left_bound_expressions);
+        if (OB_FAIL(rc)) {
+          LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+          return rc;
+        }
+        rc = expression_binder.bind_expression(right_expr, right_bound_expressions);
+        if (OB_FAIL(rc)) {
+          LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+          return rc;
+        }
+        condition.left_expr  = left_bound_expressions[0].release();
+        condition.right_expr = right_bound_expressions[0].release();
+      }
+    }
+  }
+
 
   vector<unique_ptr<Expression>> group_by_expressions;
   for (unique_ptr<Expression> &expression : select_sql.group_by) {
@@ -126,6 +183,29 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     return rc;
   }
 
+  // 9. 为join中的所有on构造filter statement
+  vector<FilterStmt *> filter_stmts;
+  for (size_t i = 0; i < select_sql.join_conditions.size(); i ++) {
+    auto &conditions = select_sql.join_conditions[i];
+    FilterStmt *filter_stmt = nullptr;
+    RC          rc          = FilterStmt::create(db,
+        default_table,
+        &table_map,
+        (*conditions).data(),
+        static_cast<int>((*conditions).size()),
+        filter_stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("cannot construct filter stmt");
+      return rc;
+    }
+    filter_stmts.push_back(filter_stmt);
+    // join_conditions中的元素是指针，无法自动释放，手动delete
+    // vector析构时同时会析构里面的元素，即ConditionSqlNode
+    // FilterUnit中的left_expr和right_expr是expression指针，来自ConditionSqlNode
+    // 但是指针类型不会被自动析构，因此这里delete没有问题
+    delete conditions;
+  }
+
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
 
@@ -133,6 +213,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->query_expressions_.swap(bound_expressions);
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);
+  select_stmt->join_filter_stmts_.swap(filter_stmts);
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }

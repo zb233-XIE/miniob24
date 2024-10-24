@@ -137,6 +137,8 @@ bool is_valid_date(const char *date) {
         COUNT
         AVG
         SUM
+        INNER
+        JOIN
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -152,6 +154,8 @@ bool is_valid_date(const char *date) {
   // std::vector<Expression *> *                agg_fun_attr_list;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
+  std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *> *  join_tuple_list;
+  std::tuple<std::string, std::vector<ConditionSqlNode> *> *  join_tuple;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
   char *                                     string;
@@ -181,6 +185,8 @@ bool is_valid_date(const char *date) {
 %type <attr_info>           attr_def
 %type <value_list>          value_list
 %type <condition_list>      where
+%type <join_tuple_list>     join_list
+%type <join_tuple>          join
 %type <condition_list>      condition_list
 %type <string>              storage_format
 %type <relation_list>       rel_list
@@ -493,7 +499,7 @@ update_stmt:      /*  update 语句的语法解析树*/
     }
     ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list where group_by
+    SELECT expression_list FROM rel_list join_list where group_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -507,13 +513,23 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if ($5 != nullptr) {
-        $$->selection.conditions.swap(*$5);
+        $$->selection.join_relations.swap(*(std::get<0>(*$5)));
+        $$->selection.join_conditions.swap(*(std::get<1>(*$5)));
+        delete std::get<0>(*$5);
+        delete std::get<1>(*$5);
+        std::reverse($$->selection.join_relations.begin(), $$->selection.join_relations.end());
+        std::reverse($$->selection.join_conditions.begin(), $$->selection.join_conditions.end());
         delete $5;
       }
 
       if ($6 != nullptr) {
-        $$->selection.group_by.swap(*$6);
+        $$->selection.conditions.swap(*$6);
         delete $6;
+      }
+
+      if ($7 != nullptr) {
+        $$->selection.group_by.swap(*$7);
+        delete $7;
       }
     }
     ;
@@ -667,6 +683,32 @@ rel_list:
       free($1);
     }
     ;
+
+join_list:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | join join_list {
+      if ($2 == nullptr) {
+        std::vector<std::string> *vs = new std::vector<std::string>;
+        std::vector<std::vector<ConditionSqlNode> *> *vvc = new std::vector<std::vector<ConditionSqlNode> *>;
+        $$ = new std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *>(vs, vvc);
+      } else {
+        $$ = $2;
+      }
+      std::vector<std::string> *vs = std::get<0>(*$$);
+      std::vector<std::vector<ConditionSqlNode> *> *vvc = std::get<1>(*$$);
+      vs->emplace_back(std::get<0>(*$1));
+      vvc->emplace_back(std::get<1>(*$1));
+      delete $1;
+    }
+
+join:
+    INNER JOIN relation ON condition_list {
+      $$ = new std::tuple<std::string, std::vector<ConditionSqlNode> *>($3, $5);
+      free($3);
+    }
 
 where:
     /* empty */

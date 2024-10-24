@@ -103,6 +103,8 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   unique_ptr<LogicalOperator> table_oper(nullptr);
   last_oper = &table_oper;
 
+  // 在JonLogicalOperator和TableGetLogicalOperator之间插入PredicateLogicalOperator
+  size_t idx = 0;
   const std::vector<Table *> &tables = select_stmt->tables();
   for (Table *table : tables) {
 
@@ -113,7 +115,21 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       JoinLogicalOperator *join_oper = new JoinLogicalOperator;
       join_oper->add_child(std::move(table_oper));
       join_oper->add_child(std::move(table_get_oper));
-      table_oper = unique_ptr<LogicalOperator>(join_oper);
+      
+      if (select_stmt->join_filter_stmts().size()) {
+        unique_ptr<LogicalOperator> predicate_oper;
+        RC                          rc = create_plan(select_stmt->join_filter_stmts()[idx++], predicate_oper);
+        if (OB_FAIL(rc)) {
+          LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+          return rc;
+        }
+        if (predicate_oper) {
+          predicate_oper->add_child(unique_ptr<LogicalOperator>(join_oper));
+          table_oper = std::move(predicate_oper);
+        }
+      } else {
+        table_oper = unique_ptr<LogicalOperator>(join_oper);
+      }
     }
   }
 
