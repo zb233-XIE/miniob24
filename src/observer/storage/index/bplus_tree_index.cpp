@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "storage/index/bplus_tree_index.h"
 #include "common/log/log.h"
+#include "event/sql_debug.h"
 #include "storage/table/table.h"
 #include "storage/db/db.h"
 
@@ -89,6 +90,7 @@ RC BplusTreeIndex::close()
 
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 { 
+  sql_debug("indexs: %s\n", FieldMeta::attrs_to_str(index_meta_.fields()).c_str());
   if (index_meta_.unique()) {
     int key_len = std::accumulate(field_metas_.begin(), field_metas_.end(), 0, [](int sum, const FieldMeta &field_meta) {
       return sum + field_meta.len();
