@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/type/char_type.h"
 #include "common/type/data_type.h"
 #include "common/value.h"
+#include <cstdlib>
 
 int CharType::compare(const Value &left, const Value &right) const
 {
@@ -36,6 +37,11 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
       result = Value((int)res);
       break;
     }
+    case AttrType::FLOATS: {
+      float res = atof(val.get_string().c_str());
+      result = Value((float)res);
+      break;
+    }
     default: return RC::UNIMPLEMENTED;
   }
   return RC::SUCCESS;
@@ -47,6 +53,9 @@ int CharType::cast_cost(AttrType type)
     return 0;
   }
   if (type == AttrType::INTS) { // char转可以转int
+    return 0;
+  }
+  if (type == AttrType::FLOATS) { // char可以转float
     return 0;
   }
   return INT32_MAX;
