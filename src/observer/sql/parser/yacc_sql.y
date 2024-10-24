@@ -131,6 +131,7 @@ bool is_valid_date(const char *date) {
         NE
         LK
         NLK
+        UNIQUE
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -300,13 +301,27 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
+      create_index.unique = false;
       if ($7 != nullptr) {
         create_index.attributes.swap(*$7);
         delete $7;
       }
       free($3);
       free($5);
-      // free($7);
+    }
+    | CREATE UNIQUE INDEX ID ON ID LBRACE rel_list RBRACE
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
+      CreateIndexSqlNode &create_index = $$->create_index;
+      create_index.index_name = $4;
+      create_index.relation_name = $6;
+      create_index.unique = true;
+      if ($8 != nullptr) {
+        create_index.attributes.swap(*$8);
+        delete $8;
+      }
+      free($4);
+      free($6);
     }
     ;
 
@@ -374,7 +389,13 @@ attr_def:
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
-      $$->length = ((AttrType)$2 == AttrType::DATES) ? 8 : 4;
+      if ((AttrType)$2 == AttrType::DATES) {
+        $$->length = 8;
+      } else if ((AttrType)$2 == AttrType::CHARS) {
+        $$->length = 32;
+      } else {
+        $$->length = 4;
+      }
       free($1);
     }
     ;

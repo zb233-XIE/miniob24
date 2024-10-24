@@ -2066,6 +2066,10 @@ RC BplusTreeScanner::open(const char *left_user_key, int left_len, bool left_inc
   return RC::SUCCESS;
 }
 
+bool BplusTreeScanner::empty_frame() {
+  return current_frame_ == nullptr;
+}
+
 void BplusTreeScanner::fetch_item(RID &rid)
 {
   LeafIndexNodeHandler node(mtr_, tree_handler_.file_header_, current_frame_);

@@ -200,7 +200,7 @@ RC Table::insert_record(Record &record)
   rc = insert_entry_of_indexes(record.data(), record.rid());
   if (rc != RC::SUCCESS) {  // 可能出现了键值重复
     RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false /*error_on_not_exists*/);
-    if (rc2 != RC::SUCCESS) {
+    if (rc2 != RC::SUCCESS && rc2 != RC::RECORD_NOT_EXIST) {
       LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
                 name(), rc2, strrc(rc2));
     }
@@ -356,7 +356,7 @@ RC Table::get_chunk_scanner(ChunkFileScanner &scanner, Trx *trx, ReadWriteMode m
   return rc;
 }
 
-RC Table::create_index(Trx *trx, const std::vector<FieldMeta> &field_metas, const char *index_name)
+RC Table::create_index(Trx *trx, const std::vector<FieldMeta> &field_metas, const char *index_name, bool unique)
 {
   if (common::is_blank(index_name) || field_metas.size() == 0) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
@@ -365,7 +365,7 @@ RC Table::create_index(Trx *trx, const std::vector<FieldMeta> &field_metas, cons
 
   IndexMeta new_index_meta;
 
-  RC rc = new_index_meta.init(index_name, field_metas);
+  RC rc = new_index_meta.init(index_name, field_metas, unique);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s", 
              name(), index_name, FieldMeta::metas_to_str(field_metas).c_str());

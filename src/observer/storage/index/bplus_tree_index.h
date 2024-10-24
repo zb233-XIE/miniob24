@@ -64,6 +64,9 @@ public:
   RC open(const char *left_key, int left_len, bool left_inclusive, const char *right_key, int right_len,
       bool right_inclusive);
 
+  // 调用open后，可利用该函数查看是否能够从Scanner中读出有效数据
+  bool has_data();
+
 private:
   BplusTreeScanner tree_scanner_;
 };

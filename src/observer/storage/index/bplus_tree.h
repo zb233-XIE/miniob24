@@ -727,6 +727,8 @@ public:
   RC open(const char *left_user_key, int left_len, bool left_inclusive, const char *right_user_key, int right_len,
       bool right_inclusive);
 
+  bool empty_frame();
+
   /**
    * @brief 获取下一条记录
    *
