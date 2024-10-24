@@ -90,7 +90,7 @@ RC BplusTreeIndex::close()
 
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 { 
-  sql_debug("index_name:%s; fields: %s\n", index_meta_.name(), FieldMeta::attrs_to_str(index_meta_.fields()).c_str());
+  sql_debug("table_name:%s;index_name:%s; fields: %s\n", table_->name(), index_meta_.name(), FieldMeta::attrs_to_str(index_meta_.fields()).c_str());
   if (index_meta_.unique()) {
     int key_len = std::accumulate(field_metas_.begin(), field_metas_.end(), 0, [](int sum, const FieldMeta &field_meta) {
       return sum + field_meta.len();
