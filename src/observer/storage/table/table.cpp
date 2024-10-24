@@ -480,10 +480,40 @@ RC Table::delete_record(const Record &record)
 }
 
 RC Table::update_record(const Record &record, char *update_data) {
-  // FIXME: any thing about indexes?
-  RC rc = record_handler_->update_record(update_data, &record.rid());
+  RC rc = RC::SUCCESS;
+
+  for (Index *index : indexes_) {
+    rc = index->delete_entry(record.data(), &record.rid());
+    if (rc != RC::SUCCESS && rc != RC::RECORD_NOT_EXIST) {
+      LOG_ERROR("fail to delete entry from index. table_name: %s, index_name: %s, rc: %s",
+                table_meta_.name(), index->index_meta().name(), strrc(rc));
+      return rc;
+    }
+
+    rc = index->insert_entry(update_data, &record.rid());
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("fail to insert entry to index. table_name: %s, index_name: %s, rc: %s",
+                table_meta_.name(), index->index_meta().name(), strrc(rc));
+      
+      // here we should rollback the delete operation
+      RC rc2 = index->insert_entry(record.data(), &record.rid());
+      if (rc2 != RC::SUCCESS) {
+        LOG_ERROR("fail to rollback insert entry to index. table_name: %s, index_name: %s, rc: %s",
+                  table_meta_.name(), index->index_meta().name(), strrc(rc));
+      }
+      break;
+    }
+  }
+
   if (rc != RC::SUCCESS) {
-    LOG_WARN("fail to update record. table_name: %s", table_meta_.name());
+    rc = RC::RECORD_DUPLICATE_KEY;
+    return rc;
+  }
+
+  rc = record_handler_->update_record(update_data, &record.rid());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("fail to update record. table_name: %s", table_meta_.name());
+    return rc;
   }
   return rc;
 }
