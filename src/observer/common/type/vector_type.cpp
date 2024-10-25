@@ -156,7 +156,7 @@ RC VectorType::to_string(const Value &val, string &result) const
   ss << "[";
   string str;
   for(int i=0; i < val.length(); i++){
-    if(i) ss << ", ";
+    if(i) ss << ",";
     ss << common::double_to_str(*(val.value_.vector_value_ + i));
   }
   ss << "]";
