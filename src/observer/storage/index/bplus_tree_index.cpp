@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "storage/index/bplus_tree_index.h"
 #include "common/log/log.h"
+#include "event/sql_debug.h"
 #include "storage/table/table.h"
 #include "storage/db/db.h"
 
@@ -88,13 +89,32 @@ RC BplusTreeIndex::close()
 }
 
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
-{
-  return index_handler_.insert_entry(record + field_metas_[0].offset(), rid);
+{ 
+  sql_debug("table_name:%s;index_name:%s; fields: %s\n", table_->name(), index_meta_.name(), FieldMeta::attrs_to_str(index_meta_.fields()).c_str());
+  const char *key = make_key(record);
+  int key_len = index_handler_.file_header().total_attr_length;
+
+  if (index_meta_.unique()) {
+    std::list<RID> rids;
+    index_handler_.get_entry(key, key_len, rids);
+    if (rids.size() > 0) {
+      LOG_WARN("Failed to insert entry due to the key is already existed. key:%s", key);
+      delete [] key;
+      return RC::RECORD_DUPLICATE_KEY;
+    }
+  }
+
+  RC rc = index_handler_.insert_entry(key, rid);
+  delete [] key;
+  return rc;
 }
 
 RC BplusTreeIndex::delete_entry(const char *record, const RID *rid)
 {
-  return index_handler_.delete_entry(record + field_metas_[0].offset(), rid);
+  const char *key = make_key(record);
+  RC rc = index_handler_.delete_entry(key, rid);
+  delete [] key;
+  return rc;
 }
 
 IndexScanner *BplusTreeIndex::create_scanner(
@@ -111,6 +131,19 @@ IndexScanner *BplusTreeIndex::create_scanner(
 }
 
 RC BplusTreeIndex::sync() { return index_handler_.sync(); }
+
+const char *BplusTreeIndex::make_key(const char *record)
+{
+  int key_len = index_handler_.file_header().total_attr_length;
+  char *key = new char[key_len + sizeof(RID)];
+  char *pkey = key;
+  for (size_t i = 0; i < field_metas_.size(); ++i) {
+    memcpy(pkey, record + field_metas_[i].offset(), field_metas_[i].len());
+    pkey += field_metas_[i].len();
+  }
+  memset(key + key_len, 0, sizeof(RID));
+  return key;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 BplusTreeIndexScanner::BplusTreeIndexScanner(BplusTreeHandler &tree_handler) : tree_scanner_(tree_handler) {}

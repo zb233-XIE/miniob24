@@ -131,6 +131,7 @@ bool is_valid_date(const char *date) {
         NE
         LK
         NLK
+        UNIQUE
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -139,6 +140,7 @@ bool is_valid_date(const char *date) {
   Value *                                    value;
   enum CompOp                                comp;
   RelAttrSqlNode *                           rel_attr;
+  SetClauseSqlNode *                         set_clause;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
   Expression *                               expression;
@@ -147,6 +149,7 @@ bool is_valid_date(const char *date) {
   std::vector<ConditionSqlNode> *            condition_list;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
+  std::vector<SetClauseSqlNode> *            set_clause_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -199,6 +202,8 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
 %type <sql_node>            command_wrapper
+%type <set_clause>          set_clause
+%type <set_clause_list>     set_clause_list
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -300,13 +305,27 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
+      create_index.unique = false;
       if ($7 != nullptr) {
         create_index.attributes.swap(*$7);
         delete $7;
       }
       free($3);
       free($5);
-      // free($7);
+    }
+    | CREATE UNIQUE INDEX ID ON ID LBRACE rel_list RBRACE
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
+      CreateIndexSqlNode &create_index = $$->create_index;
+      create_index.index_name = $4;
+      create_index.relation_name = $6;
+      create_index.unique = true;
+      if ($8 != nullptr) {
+        create_index.attributes.swap(*$8);
+        delete $8;
+      }
+      free($4);
+      free($6);
     }
     ;
 
@@ -374,7 +393,13 @@ attr_def:
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
-      $$->length = ((AttrType)$2 == AttrType::DATES) ? 8 : 4;
+      if ((AttrType)$2 == AttrType::DATES) {
+        $$->length = 8;
+      } else if ((AttrType)$2 == AttrType::CHARS) {
+        $$->length = 32;
+      } else {
+        $$->length = 4;
+      }
       free($1);
     }
     ;
@@ -471,20 +496,49 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where 
-    {
-      $$ = new ParsedSqlNode(SCF_UPDATE);
-      $$->update.relation_name = $2;
-      $$->update.attribute_name = $4;
-      $$->update.value = *$6;
-      if ($7 != nullptr) {
-        $$->update.conditions.swap(*$7);
-        delete $7;
-      }
-      free($2);
-      free($4);
+  UPDATE ID SET set_clause_list where 
+  {
+    $$ = new ParsedSqlNode(SCF_UPDATE);
+    $$->update.relation_name = $2;
+    if ($4 != nullptr) {
+      $$->update.set_clauses.swap(*$4);
+      delete $4;
     }
-    ;
+    if ($5 != nullptr) {
+      $$->update.conditions.swap(*$5);
+      delete $5;
+    }
+    free($2);
+  }
+  ;
+
+set_clause_list:
+  set_clause {
+    $$ = new std::vector<SetClauseSqlNode>;
+    $$->emplace_back(*$1);
+    delete $1;
+  }
+  | set_clause COMMA set_clause_list
+  {
+    if ($3 != nullptr) {
+      $$ = $3;
+    } else {
+      $$ = new std::vector<SetClauseSqlNode>;
+    }
+    $$->emplace($$->begin(), *$1);
+    delete $1;
+  }
+  ;
+
+set_clause:
+  ID EQ value {
+    $$ = new SetClauseSqlNode;
+    $$->attribute_name = $1;
+    $$->value = *$3;
+    free($1);
+    delete $3;
+  }
+  ;
 select_stmt:        /*  select 语句的语法解析树*/
     SELECT expression_list FROM rel_list where group_by
     {

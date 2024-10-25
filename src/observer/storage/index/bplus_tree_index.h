@@ -46,6 +46,8 @@ private:
   bool             inited_ = false;
   Table           *table_  = nullptr;
   BplusTreeHandler index_handler_;
+
+  const char *make_key(const char *record);
 };
 
 /**
