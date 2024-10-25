@@ -521,12 +521,27 @@ RC Table::update_record(const Record &record, char *update_data) {
 RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
 {
   RC rc = RC::SUCCESS;
-  for (Index *index : indexes_) {
+  int fail_index = -1;
+
+  for (size_t i = 0; i < indexes_.size(); i++) {
+    Index *index = indexes_[i];
     rc = index->insert_entry(record, &rid);
     if (rc != RC::SUCCESS) {
+      fail_index = i;
       break;
     }
   }
+
+  RC rc2;
+  for (int i = fail_index - 1; i >= 0; i--) {
+    Index *index = indexes_[i];
+    rc2 = index->delete_entry(record, &rid);
+    if (rc2 != RC::SUCCESS) {
+      LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
+                name(), rc, strrc(rc));
+    }
+  }
+
   return rc;
 }
 
