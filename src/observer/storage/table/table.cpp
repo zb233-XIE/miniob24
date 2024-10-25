@@ -304,6 +304,11 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     if (copy_len > data_len) {
       copy_len = data_len + 1;
     }
+  } else if(field->type() == AttrType::VECTORS){
+    if(copy_len != data_len * sizeof(float)){
+      LOG_INFO("vector length miss match, wanted: %d, have: %d", copy_len/sizeof(float), data_len);
+      return RC::INVALID_ARGUMENT;
+    }
   }
   memcpy(record_data + field->offset(), value.data(), copy_len);
   return RC::SUCCESS;

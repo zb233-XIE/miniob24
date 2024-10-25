@@ -9,9 +9,14 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #include "common/lang/comparator.h"
+#include "common/lang/string.h"
 #include "common/log/log.h"
+#include "common/type/attr_type.h"
 #include "common/type/char_type.h"
 #include "common/value.h"
+#include <cstring>
+#include <stdexcept>
+#include <string>
 
 int CharType::compare(const Value &left, const Value &right) const
 {
@@ -26,10 +31,52 @@ RC CharType::set_value_from_str(Value &val, const string &data) const
   return RC::SUCCESS;
 }
 
+bool CharType::cast_to_vector(char* src, Value& result) const
+{
+  int src_len = std::strlen(src);
+  if(src[0] == '[' && src[src_len - 1] == ']'){
+    src = common::substr(src, 1, src_len-2);
+    vector<char*> elems_str;
+    common::split_string(src, ',', elems_str, true);
+    int len = elems_str.size();
+    float* elems = new float[len];
+    for(int i=0; i<len; i++){
+      char*& elem_str = elems_str[i];
+      int sz = std::strlen(elem_str);
+      size_t pos;
+      try {
+        *(elems + i) = std::stof(elem_str, &pos);
+      } catch (const std::invalid_argument err) {
+        LOG_INFO("Invalid input: %s is not a valid float", elem_str);
+        delete [] elems;
+        return false;
+      }
+      if(pos != sz){
+        LOG_INFO("Invalid input: %s is not a valid float", elem_str);
+        delete [] elems;
+        return false;
+      }
+    }
+    result.set_vector(elems, len);
+    delete [] elems;
+    return true;
+  }
+  return false;
+}
+
 RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
 {
   switch (type) {
-    default: return RC::UNIMPLEMENTED;
+    case AttrType::VECTORS: {
+      char* src = val.value_.pointer_value_;
+      if(cast_to_vector(src, result)){
+        return RC::SUCCESS;
+      } else {
+        LOG_INFO("%s: not a valid string representation of vector", src);
+        return RC::INVALID_ARGUMENT;
+      }
+    } break;
+    default: return RC::UNSUPPORTED;
   }
   return RC::SUCCESS;
 }
@@ -38,6 +85,8 @@ int CharType::cast_cost(AttrType type)
 {
   if (type == AttrType::CHARS) {
     return 0;
+  } else if(type == AttrType::VECTORS){
+    return 1;
   }
   return INT32_MAX;
 }

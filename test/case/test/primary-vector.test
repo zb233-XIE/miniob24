@@ -1,0 +1,21 @@
+CREATE TABLE items (id int, embedding vector(3));
+INSERT INTO items VALUES (1, '[1.0,2.76,3.2]');
+insert into items values (2, [3,4.78,5]);
+insert into items values (3, [-1,10.5,11.296]);
+insert into items values (4, [0,1.23,-12.875]);
+insert into items values (5, [0,1,2]);
+
+select * from items where embedding > [0, 0, 0]
+select * from items where embedding > '[0, 0, 0]'
+
+select embedding + '[1.5,2.3,3.3]', embedding - '[1,2,3]', '[1,2,3]' - embedding from items where embedding > '[0,0,0]';
+select embedding + [1.5,2.3,3.3], embedding - [1,2,3], [1,2,3] - embedding from items where embedding > [0,0,0];
+
+calc l2_distance([1, 2, 3], [4, 5, 6])
+calc l2_distance('[1, 2, 3]', [4, 5, 6])
+
+calc cosine_distance([1, 2, 3], [4, 5, 6])
+calc cosine_distance('[1, 2, 3]', '[4, 5, 6]')
+
+calc inner_product([1, 2, 3], [4, 5, 6])
+calc inner_product([1, 2, 3], [4, 5, 6])

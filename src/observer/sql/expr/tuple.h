@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include <vector>
 
 #include "common/log/log.h"
+#include "common/type/attr_type.h"
 #include "sql/expr/expression.h"
 #include "sql/expr/tuple_cell.h"
 #include "sql/parser/parse.h"
@@ -200,7 +201,12 @@ public:
     FieldExpr       *field_expr = speces_[index];
     const FieldMeta *field_meta = field_expr->field().meta();
     cell.set_type(field_meta->type());
-    cell.set_data(this->record_->data() + field_meta->offset(), field_meta->len());
+    char* data = this->record_->data() + field_meta->offset();
+    int len = field_meta->len();
+    if(field_meta->type() == AttrType::VECTORS){
+      len /= sizeof(float);
+    }
+    cell.set_data(data, len);
     return RC::SUCCESS;
   }
 
