@@ -96,17 +96,19 @@ RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
       return sum + field_meta.len();
     });
     char *key = new char[key_len + sizeof(RID)];
+    char *pkey = key;
     for (size_t i = 0; i < field_metas_.size(); ++i) {
-      memcpy(key + field_metas_[i].offset(), record + field_metas_[i].offset(), field_metas_[i].len());
-      memset(key + key_len, 0, sizeof(RID));
+      memcpy(pkey, record + field_metas_[i].offset(), field_metas_[i].len());
+      pkey += field_metas_[i].len();
     }
+    memset(key + key_len, 0, sizeof(RID));
 
-    BplusTreeIndexScanner scanner(index_handler_);
-    scanner.open(key, key_len, true, key, key_len, true);
-    if (scanner.has_data()) {
+    std::list<RID> rids;
+    index_handler_.get_entry(key, key_len, rids);
+    if (rids.size() > 0) {
       LOG_WARN("Failed to insert entry due to the key is already existed. key:%s", key);
       delete [] key;
-      return RC::EXIST;
+      return RC::RECORD_DUPLICATE_KEY;
     }
     delete []key;
   }
@@ -144,8 +146,6 @@ RC BplusTreeIndexScanner::open(
 {
   return tree_scanner_.open(left_key, left_len, left_inclusive, right_key, right_len, right_inclusive);
 }
-
-bool BplusTreeIndexScanner::has_data() { return !tree_scanner_.empty_frame(); }
 
 RC BplusTreeIndexScanner::next_entry(RID *rid) { return tree_scanner_.next_entry(*rid); }
 
