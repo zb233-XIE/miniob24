@@ -42,6 +42,7 @@ bool CharType::cast_to_vector(char* src, Value& result) const
     float* elems = new float[len];
     for(int i=0; i<len; i++){
       char*& elem_str = elems_str[i];
+      elem_str = common::strip(elem_str);
       int sz = std::strlen(elem_str);
       size_t pos;
       try {
