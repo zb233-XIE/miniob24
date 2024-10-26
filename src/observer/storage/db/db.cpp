@@ -24,6 +24,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/os/path.h"
 #include "common/global_context.h"
 #include "storage/common/meta_util.h"
+#include "storage/index/index.h"
 #include "storage/table/table.h"
 #include "storage/table/table_meta.h"
 #include "storage/trx/trx.h"
@@ -169,7 +170,6 @@ RC Db::drop_table(const char *table_name) {
 
   Table *table = opened_tables_[table_name];
   opened_tables_.erase(table_name);
-  delete table;
 
   string meta_file = table_meta_file(path_.c_str(), table_name);
   string data_file = table_data_file(path_.c_str(), table_name);
@@ -185,6 +185,19 @@ RC Db::drop_table(const char *table_name) {
       strerror(errno), table_name, data_file.c_str());
     return RC::INTERNAL;
   }
+
+  // delete table index file
+  for (const Index *index : table->indexes()) {
+    const char *index_name = index->index_meta().name();
+    string index_file = table_index_file(path_.c_str(), table_name, index_name);
+    if (unlink(index_file.c_str()) < 0) {
+      LOG_WARN("failed to remove index file: %s. table: %s, index: %s, index_file: %s", 
+        strerror(errno), table_name, index_name, index_file.c_str());
+      return RC::INTERNAL;
+    }
+  }
+
+  delete table;
   return RC::SUCCESS;
 }
 

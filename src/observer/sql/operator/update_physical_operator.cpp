@@ -31,11 +31,15 @@ RC UpdatePhysicalOperator::open(Trx *trx) {
   for (Record &record: records_) {
     char *updated_data = new char[record.len()];
     memcpy(updated_data, record.data(), record.len());
-    if (field_.type() == AttrType::CHARS) {
-      memset(updated_data + field_.offset(), 0, field_.len());
+
+    for (size_t i = 0; i < fields_.size(); i++) {
+      const FieldMeta &field = fields_[i];
+      if (field.type() == AttrType::CHARS) {
+        memset(updated_data + field.offset(), 0, field.len());
+      }
+      memcpy(updated_data + field.offset(), values_[i].data(), values_[i].length());
     }
 
-    memcpy(updated_data + field_.offset(), value_->data(), value_->length());
     rc = trx->update_record(table_, record, updated_data);
     delete [] updated_data;
 

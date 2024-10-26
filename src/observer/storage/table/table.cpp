@@ -158,19 +158,22 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
     const IndexMeta *index_meta = table_meta_.index(i);
-    const FieldMeta *field_meta = table_meta_.field(index_meta->field());
-    if (field_meta == nullptr) {
-      LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
-                name(), index_meta->name(), index_meta->field());
-      // skip cleanup
-      //  do all cleanup action in destructive Table function
-      return RC::INTERNAL;
+    std::vector<FieldMeta> field_metas;
+  
+    for (size_t j = 0; j < index_meta->fields().size(); j++) {
+      const FieldMeta *field_meta = table_meta_.field(index_meta->fields()[j].c_str());
+      if (field_meta == nullptr) {
+        LOG_ERROR("Failed to find field meta. table=%s, index=%s, field=%s",
+                  name(), index_meta->name(), index_meta->fields()[j].c_str());
+        return RC::INTERNAL;
+      }
+      field_metas.push_back(*field_meta);
     }
 
     BplusTreeIndex *index      = new BplusTreeIndex();
     string          index_file = table_index_file(base_dir, name(), index_meta->name());
 
-    rc = index->open(this, index_file.c_str(), *index_meta, *field_meta);
+    rc = index->open(this, index_file.c_str(), *index_meta, field_metas);
     if (rc != RC::SUCCESS) {
       delete index;
       LOG_ERROR("Failed to open index. table=%s, index=%s, file=%s, rc=%s",
@@ -197,7 +200,7 @@ RC Table::insert_record(Record &record)
   rc = insert_entry_of_indexes(record.data(), record.rid());
   if (rc != RC::SUCCESS) {  // 可能出现了键值重复
     RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false /*error_on_not_exists*/);
-    if (rc2 != RC::SUCCESS) {
+    if (rc2 != RC::SUCCESS && rc2 != RC::RECORD_NOT_EXIST) {
       LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
                 name(), rc2, strrc(rc2));
     }
@@ -358,19 +361,19 @@ RC Table::get_chunk_scanner(ChunkFileScanner &scanner, Trx *trx, ReadWriteMode m
   return rc;
 }
 
-RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_name)
+RC Table::create_index(Trx *trx, const std::vector<FieldMeta> &field_metas, const char *index_name, bool unique)
 {
-  if (common::is_blank(index_name) || nullptr == field_meta) {
+  if (common::is_blank(index_name) || field_metas.size() == 0) {
     LOG_INFO("Invalid input arguments, table name is %s, index_name is blank or attribute_name is blank", name());
     return RC::INVALID_ARGUMENT;
   }
 
   IndexMeta new_index_meta;
 
-  RC rc = new_index_meta.init(index_name, *field_meta);
+  RC rc = new_index_meta.init(index_name, field_metas, unique);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init IndexMeta in table:%s, index_name:%s, field_name:%s", 
-             name(), index_name, field_meta->name());
+             name(), index_name, FieldMeta::metas_to_str(field_metas).c_str());
     return rc;
   }
 
@@ -378,7 +381,7 @@ RC Table::create_index(Trx *trx, const FieldMeta *field_meta, const char *index_
   BplusTreeIndex *index      = new BplusTreeIndex();
   string          index_file = table_index_file(base_dir_.c_str(), name(), index_name);
 
-  rc = index->create(this, index_file.c_str(), new_index_meta, *field_meta);
+  rc = index->create(this, index_file.c_str(), new_index_meta, field_metas);
   if (rc != RC::SUCCESS) {
     delete index;
     LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
@@ -482,10 +485,40 @@ RC Table::delete_record(const Record &record)
 }
 
 RC Table::update_record(const Record &record, char *update_data) {
-  // FIXME: any thing about indexes?
-  RC rc = record_handler_->update_record(update_data, &record.rid());
+  RC rc = RC::SUCCESS;
+
+  for (Index *index : indexes_) {
+    rc = index->delete_entry(record.data(), &record.rid());
+    if (rc != RC::SUCCESS && rc != RC::RECORD_NOT_EXIST) {
+      LOG_ERROR("fail to delete entry from index. table_name: %s, index_name: %s, rc: %s",
+                table_meta_.name(), index->index_meta().name(), strrc(rc));
+      return rc;
+    }
+
+    rc = index->insert_entry(update_data, &record.rid());
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("fail to insert entry to index. table_name: %s, index_name: %s, rc: %s",
+                table_meta_.name(), index->index_meta().name(), strrc(rc));
+      
+      // here we should rollback the delete operation
+      RC rc2 = index->insert_entry(record.data(), &record.rid());
+      if (rc2 != RC::SUCCESS) {
+        LOG_ERROR("fail to rollback insert entry to index. table_name: %s, index_name: %s, rc: %s",
+                  table_meta_.name(), index->index_meta().name(), strrc(rc));
+      }
+      break;
+    }
+  }
+
   if (rc != RC::SUCCESS) {
-    LOG_WARN("fail to update record. table_name: %s", table_meta_.name());
+    rc = RC::RECORD_DUPLICATE_KEY;
+    return rc;
+  }
+
+  rc = record_handler_->update_record(update_data, &record.rid());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("fail to update record. table_name: %s", table_meta_.name());
+    return rc;
   }
   return rc;
 }
@@ -493,12 +526,27 @@ RC Table::update_record(const Record &record, char *update_data) {
 RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
 {
   RC rc = RC::SUCCESS;
-  for (Index *index : indexes_) {
+  int fail_index = -1;
+
+  for (size_t i = 0; i < indexes_.size(); i++) {
+    Index *index = indexes_[i];
     rc = index->insert_entry(record, &rid);
     if (rc != RC::SUCCESS) {
+      fail_index = i;
       break;
     }
   }
+
+  RC rc2;
+  for (int i = fail_index - 1; i >= 0; i--) {
+    Index *index = indexes_[i];
+    rc2 = index->delete_entry(record, &rid);
+    if (rc2 != RC::SUCCESS) {
+      LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
+                name(), rc, strrc(rc));
+    }
+  }
+
   return rc;
 }
 
