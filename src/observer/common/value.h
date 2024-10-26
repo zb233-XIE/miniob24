@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/memory.h"
 #include "common/type/attr_type.h"
 #include "common/type/data_type.h"
+#include <vector>
 
 /**
  * @brief 属性的值
@@ -47,6 +48,7 @@ public:
   explicit Value(bool val);
   explicit Value(const char *s, int len = 0);
   explicit Value(time_t val);
+  explicit Value(const float* base, int len = 0);
 
   Value(const Value &other);
   Value(Value &&other);
@@ -74,6 +76,22 @@ public:
   static RC divide(const Value &left, const Value &right, Value &result)
   {
     return DataType::type_instance(result.attr_type())->divide(left, right, result);
+  }
+
+  static RC l2_distance(const Value &left, const Value &right, Value &result)
+  {
+    return DataType::type_instance(AttrType::VECTORS)->l2_distance(left, right, result);
+
+  }
+  static RC cosine_distance(const Value &left, const Value &right, Value &result)
+  {
+    return DataType::type_instance(AttrType::VECTORS)->cosine_distance(left, right, result);
+
+  }
+  static RC inner_product(const Value &left, const Value &right, Value &result)
+  {
+    return DataType::type_instance(AttrType::VECTORS)->inner_product(left, right, result);
+
   }
 
   static RC negative(const Value &value, Value &result)
@@ -105,23 +123,29 @@ public:
   /**
    * 获取对应的值
    * 如果当前的类型与期望获取的类型不符，就会执行转换操作
+   * 并不会改变本对象成员变量
    */
   int    get_int() const;
   float  get_float() const;
   string get_string() const;
   bool   get_boolean() const;
   time_t get_date() const;
+  std::vector<float>* get_vector() const;
 
 private:
+  // bool char_to_vector(); // implicitly convert the string representation of vectors
   void set_int(int val);
   void set_float(float val);
   void set_string(const char *s, int len = 0);
   void set_string_from_other(const Value &other);
+  void set_vector_from_other(const Value &other);
   void set_date(time_t t);
+  void set_vector(const float* base, int len=0);
 
 private:
   AttrType attr_type_ = AttrType::UNDEFINED;
   int      length_    = 0;
+  // [ATT!]: For a vector type, length_ => number of dimension
 
   union Val
   {
@@ -130,8 +154,10 @@ private:
     bool    bool_value_;
     char   *pointer_value_;
     time_t  time_value_;
+    float*  vector_value_;
   } value_ = {.int_value_ = 0};
 
-  /// 是否申请并占有内存, 目前对于 CHARS 类型 own_data_ 为true, 其余类型 own_data_ 为false
+  // 是否申请并占有内存
+  // 对于 CHARS 和 VECTORS 类型 own_data_ 为true, 其余类型 own_data_ 为false
   bool own_data_ = false;
 };

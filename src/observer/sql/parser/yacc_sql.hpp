@@ -106,12 +106,17 @@ extern int yydebug;
     LK = 307,                      /* LK  */
     NLK = 308,                     /* NLK  */
     UNIQUE = 309,                  /* UNIQUE  */
-    NUMBER = 310,                  /* NUMBER  */
-    FLOAT = 311,                   /* FLOAT  */
-    ID = 312,                      /* ID  */
-    SSS = 313,                     /* SSS  */
-    DATE = 314,                    /* DATE  */
-    UMINUS = 315                   /* UMINUS  */
+    LBRACKET = 310,                /* LBRACKET  */
+    RBRACKET = 311,                /* RBRACKET  */
+    L2_DISTANCE = 312,             /* L2_DISTANCE  */
+    COSINE_DISTANCE = 313,         /* COSINE_DISTANCE  */
+    INNER_PRODUCT = 314,           /* INNER_PRODUCT  */
+    NUMBER = 315,                  /* NUMBER  */
+    FLOAT = 316,                   /* FLOAT  */
+    ID = 317,                      /* ID  */
+    SSS = 318,                     /* SSS  */
+    DATE = 319,                    /* DATE  */
+    UMINUS = 320                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -120,7 +125,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 137 "yacc_sql.y"
+#line 142 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -137,12 +142,13 @@ union YYSTYPE
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
+  std::vector<float> *                       vector_elem_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
   char *                                     date;
 
-#line 146 "yacc_sql.hpp"
+#line 152 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

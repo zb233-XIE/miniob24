@@ -13,6 +13,8 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/expr/expression.h"
+#include "common/type/attr_type.h"
+#include "common/value.h"
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
 
@@ -355,6 +357,10 @@ AttrType ArithmeticExpr::value_type() const
     return AttrType::INTS;
   }
 
+  if(left_->value_type() == AttrType::VECTORS || right_->value_type() == AttrType::VECTORS){
+    return AttrType::VECTORS;
+  }
+
   return AttrType::FLOATS;
 }
 
@@ -384,6 +390,18 @@ RC ArithmeticExpr::calc_value(const Value &left_value, const Value &right_value,
 
     case Type::NEGATIVE: {
       Value::negative(left_value, value);
+    } break;
+
+    case Type::L2_DIS: {
+      Value::l2_distance(left_value, right_value, value);
+    } break;
+
+    case Type::COS_DIS: {
+      Value::cosine_distance(left_value, right_value, value);
+    } break;
+
+    case Type::INN_PDT: {
+      Value::inner_product(left_value, right_value, value);
     } break;
 
     default: {

@@ -132,6 +132,11 @@ bool is_valid_date(const char *date) {
         LK
         NLK
         UNIQUE
+        LBRACKET
+        RBRACKET
+        L2_DISTANCE
+        COSINE_DISTANCE
+        INNER_PRODUCT
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -150,6 +155,7 @@ bool is_valid_date(const char *date) {
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
+  std::vector<float> *                       vector_elem_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -174,6 +180,8 @@ bool is_valid_date(const char *date) {
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <value_list>          value_list
+%type <floats>              vector_elem
+%type <vector_elem_list>    vector_value_list
 %type <condition_list>      where
 %type <condition_list>      condition_list
 %type <string>              storage_format
@@ -471,7 +479,39 @@ value:
       free(tmp);
       free($1);
     }
+    | LBRACKET vector_elem vector_value_list RBRACKET {
+      vector<float>* cur = $3;
+      if($3 == nullptr){
+        cur = new vector<float>;
+      }
+      cur->push_back((float)$2);
+      std::reverse(cur->begin(), cur->end());
+      $$ = new Value(cur->data(), cur->size());
+      delete cur;
+    }
     ;
+vector_elem:
+    NUMBER {
+      $$ = (float)$1;
+      @$ = @1;
+    }
+    |FLOAT {
+      $$ = (float)$1;
+      @$ = @1;
+    }
+    ;
+vector_value_list:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | COMMA vector_elem vector_value_list{
+      $$ = $3;
+      if($$ == nullptr){
+        $$ = new vector<float>;
+      }
+      $$->push_back($2);
+    };
 storage_format:
     /* empty */
     {
@@ -605,6 +645,15 @@ expression:
     | LBRACE expression RBRACE {
       $$ = $2;
       $$->set_name(token_name(sql_string, &@$));
+    }
+    | L2_DISTANCE LBRACE expression COMMA expression RBRACE {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::L2_DIS, $3, $5, sql_string, &@$);
+    }
+    | COSINE_DISTANCE LBRACE expression COMMA expression RBRACE {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::COS_DIS, $3, $5, sql_string, &@$);
+    }
+    | INNER_PRODUCT LBRACE expression COMMA expression RBRACE {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::INN_PDT, $3, $5, sql_string, &@$);
     }
     | '-' expression %prec UMINUS {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2, nullptr, sql_string, &@$);
