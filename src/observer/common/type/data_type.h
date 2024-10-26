@@ -68,6 +68,21 @@ public:
   virtual RC divide(const Value &left, const Value &right, Value &result) const { return RC::UNSUPPORTED; }
 
   /**
+   * @brief 向量类型算子，l2_distance
+   */
+  virtual RC l2_distance(const Value &left, const Value &right, Value &result) const { return RC::UNSUPPORTED; }
+
+  /**
+   * @brief 向量类型算子，cosine_distance
+   */
+  virtual RC cosine_distance(const Value &left, const Value &right, Value &result) const { return RC::UNSUPPORTED; }
+
+  /**
+   * @brief 向量类型算子，inner_product
+   */
+  virtual RC inner_product(const Value &left, const Value &right, Value &result) const { return RC::UNSUPPORTED; }
+
+  /**
    * @brief 计算 -val，并将结果保存到 result 中
    */
   virtual RC negative(const Value &val, Value &result) const { return RC::UNSUPPORTED; }

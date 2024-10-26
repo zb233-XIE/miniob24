@@ -19,6 +19,9 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/sstream.h"
 #include "common/lang/string.h"
 #include "common/log/log.h"
+#include "common/rc.h"
+#include "common/type/attr_type.h"
+#include <vector>
 
 Value::Value(int val) { set_int(val); }
 
@@ -30,6 +33,8 @@ Value::Value(const char *s, int len /*= 0*/) { set_string(s, len); }
 
 Value::Value(time_t val) { set_date(val); }
 
+Value::Value(const float* base, int len) { set_vector(base, len); }
+
 Value::Value(const Value &other)
 {
   this->attr_type_ = other.attr_type_;
@@ -39,7 +44,9 @@ Value::Value(const Value &other)
     case AttrType::CHARS: {
       set_string_from_other(other);
     } break;
-
+    case AttrType::VECTORS: {
+      set_vector_from_other(other);
+    } break;
     default: {
       this->value_ = other.value_;
     } break;
@@ -69,7 +76,9 @@ Value &Value::operator=(const Value &other)
     case AttrType::CHARS: {
       set_string_from_other(other);
     } break;
-
+    case AttrType::VECTORS: {
+      set_vector_from_other(other);
+    } break;
     default: {
       this->value_ = other.value_;
     } break;
@@ -95,6 +104,13 @@ Value &Value::operator=(Value &&other)
 void Value::reset()
 {
   switch (attr_type_) {
+    case AttrType::VECTORS: {
+      if(own_data_ && value_.vector_value_ != nullptr){
+        delete [] value_.vector_value_;
+        value_.vector_value_ = nullptr;
+      }
+      break;
+    }
     case AttrType::CHARS:
       if (own_data_ && value_.pointer_value_ != nullptr) {
         delete[] value_.pointer_value_;
@@ -130,6 +146,9 @@ void Value::set_data(char *data, int length)
     case AttrType::DATES:{
       value_.time_value_ = *(time_t *)data;
       length_ = length;
+    } break;
+    case AttrType::VECTORS: {
+      set_vector((float*)data, length);
     } break;
     default: {
       LOG_WARN("unknown data type: %d", attr_type_);
@@ -199,6 +218,10 @@ void Value::set_value(const Value &value)
     case AttrType::DATES:{
       set_date(value.get_date());
     } break;
+    case AttrType::VECTORS:{
+      std::vector<float> *vec = value.get_vector();
+      set_vector(vec->data(), vec->size());
+    } break;
     default: {
       ASSERT(false, "got an invalid value type");
     } break;
@@ -218,6 +241,9 @@ void Value::set_string_from_other(const Value &other)
 const char *Value::data() const
 {
   switch (attr_type_) {
+    case AttrType::VECTORS: {
+      return (const char*)value_.vector_value_;
+    }break;
     case AttrType::CHARS: {
       return value_.pointer_value_;
     } break;
@@ -350,4 +376,56 @@ void Value::set_date(time_t t) {
   attr_type_         = AttrType::DATES;
   value_.time_value_ = t;
   length_            = sizeof(time_t); 
+}
+
+// void Value::char_to_vector()
+// {
+//   ASSERT(attr_type_ == AttrType::CHARS, "no convertion from %s to vectors", attr_type_to_string(attr_type_));
+
+// }
+
+// 
+std::vector<float>* Value::get_vector() const
+{
+  switch (attr_type_) {
+    case AttrType::VECTORS :{
+      return new std::vector<float>{value_.vector_value_, value_.vector_value_ + length_};
+    } break;
+    case AttrType::CHARS :{
+      Value result;
+      if(OB_SUCC(cast_to(*this, AttrType::VECTORS, result))){
+        return result.get_vector();
+      }
+      LOG_ERROR("no convertion from %s to vectors", attr_type_to_string(attr_type_));
+      return nullptr;
+    } break;
+    default: {
+      LOG_ERROR("no convertion from %s to vectors", attr_type_to_string(attr_type_));
+      return nullptr;
+    }
+  }
+}
+
+void Value::set_vector(const float* base, int length)
+{
+  reset();
+  attr_type_ = AttrType::VECTORS;
+  if (base == nullptr) {
+    value_.vector_value_  = nullptr;
+    length_               = 0;
+  } else {
+    own_data_ = true;
+    value_.vector_value_ = new float[length];
+    length_              = length;
+    memcpy(value_.vector_value_, base, length*sizeof(float));
+  }
+}
+
+void Value::set_vector_from_other(const Value &other)
+{
+  ASSERT(attr_type_ == AttrType::VECTORS, "attr type is not VECTORS");
+  if (own_data_ && other.value_.vector_value_ != nullptr && length_ != 0) {
+    this->value_.vector_value_ = new float[this->length_];
+    memcpy(this->value_.vector_value_, other.value_.vector_value_, this->length_ * sizeof(float));
+  }
 }

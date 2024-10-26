@@ -16,6 +16,8 @@ See the Mulan PSL v2 for more details. */
 #include <string.h>
 
 #include "common/lang/algorithm.h"
+#include "lang/comparator.h"
+#include "log/log.h"
 
 namespace common {
 
@@ -75,6 +77,27 @@ int compare_time(void *arg1, void *arg2) {
     return -1;
   } else {
     return 0;
+  }
+}
+
+int compare_vector(void *arg1, int arg1_length, void *arg2, int arg2_length){
+  ASSERT(arg1_length == arg2_length, "OP:CMP Vector dimension mismatch");
+  float* vector1_base = (float*)arg1;
+  float* vector2_base = (float*)arg2;
+  int len = min(arg1_length, arg2_length);
+  int flag;
+  for(int i=0;i<len;i++){
+    flag = compare_float(vector1_base + i, vector2_base + i);
+    if(flag != 0){
+      return flag;
+    }
+  }
+  if(arg1_length > arg2_length){
+    return 1;
+  } else if(arg1_length == arg2_length){
+    return 0;
+  } else {
+    return -1;
   }
 }
 

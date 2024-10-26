@@ -27,8 +27,8 @@ public:
   BplusTreeIndex() = default;
   virtual ~BplusTreeIndex() noexcept;
 
-  RC create(Table *table, const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta) override;
-  RC open(Table *table, const char *file_name, const IndexMeta &index_meta, const FieldMeta &field_meta) override;
+  RC create(Table *table, const char *file_name, const IndexMeta &index_meta, const std::vector<FieldMeta> &field_metas) override;
+  RC open(Table *table, const char *file_name, const IndexMeta &index_meta, const std::vector<FieldMeta> &field_metas) override;
   RC close();
 
   RC insert_entry(const char *record, const RID *rid) override;
@@ -46,6 +46,8 @@ private:
   bool             inited_ = false;
   Table           *table_  = nullptr;
   BplusTreeHandler index_handler_;
+
+  const char *make_key(const char *record);
 };
 
 /**

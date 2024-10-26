@@ -77,7 +77,7 @@ public:
    */
   virtual RC get_value(const Tuple &tuple, Value &value) const = 0;
 
-  /**
+  /**@
    * @brief 在没有实际运行的情况下，也就是无法获取tuple的情况下，尝试获取表达式的值
    * @details 有些表达式的值是固定的，比如ValueExpr，这种情况下可以直接获取值
    */
@@ -361,6 +361,10 @@ public:
     MUL,
     DIV,
     NEGATIVE,
+    // vector exclusive operations
+    L2_DIS,
+    COS_DIS,
+    INN_PDT,
   };
 
 public:

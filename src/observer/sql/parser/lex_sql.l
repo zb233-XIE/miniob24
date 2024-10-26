@@ -143,9 +143,15 @@ AVG                                     RETURN_TOKEN(AVG);
 SUM                                     RETURN_TOKEN(SUM);
 LIKE                                    RETURN_TOKEN(LK);
 "NOT LIKE"                              RETURN_TOKEN(NLK);
-{ID}                                    last_flag=1;yylval->string=strdup(yytext); RETURN_TOKEN(ID);
+UNIQUE                                  RETURN_TOKEN(UNIQUE);
+L2_DISTANCE                             RETURN_TOKEN(L2_DISTANCE);
+COSINE_DISTANCE                         RETURN_TOKEN(COSINE_DISTANCE);
+INNER_PRODUCT                           RETURN_TOKEN(INNER_PRODUCT);
+{ID}                                    last_flag=1; yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
-")"                                     last_flag=1;RETURN_TOKEN(RBRACE);
+")"                                     last_flag=1; RETURN_TOKEN(RBRACE);
+"["                                     RETURN_TOKEN(LBRACKET);
+"]"                                     RETURN_TOKEN(RBRACKET);
 
 ","                                     last_flag=0;RETURN_TOKEN(COMMA);
 "="                                     last_flag=0;RETURN_TOKEN(EQ);

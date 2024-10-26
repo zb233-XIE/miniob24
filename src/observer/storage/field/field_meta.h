@@ -49,6 +49,8 @@ public:
 public:
   void      to_json(Json::Value &json_value) const;
   static RC from_json(const Json::Value &json_value, FieldMeta &field);
+  static string attrs_to_str(const std::vector<std::string> &attrs);
+  static string metas_to_str(const std::vector<FieldMeta> &fields);
 
 protected:
   string   name_;

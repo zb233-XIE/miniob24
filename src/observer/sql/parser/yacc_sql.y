@@ -139,6 +139,12 @@ bool is_valid_date(const char *date) {
         SUM
         INNER
         JOIN
+        UNIQUE
+        LBRACKET
+        RBRACKET
+        L2_DISTANCE
+        COSINE_DISTANCE
+        INNER_PRODUCT
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -147,6 +153,7 @@ bool is_valid_date(const char *date) {
   Value *                                    value;
   enum CompOp                                comp;
   RelAttrSqlNode *                           rel_attr;
+  SetClauseSqlNode *                         set_clause;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
   Expression *                               expression;
@@ -158,6 +165,8 @@ bool is_valid_date(const char *date) {
   std::tuple<std::string, std::vector<ConditionSqlNode> *> *  join_tuple;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
+  std::vector<SetClauseSqlNode> *            set_clause_list;
+  std::vector<float> *                       vector_elem_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -184,6 +193,8 @@ bool is_valid_date(const char *date) {
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <value_list>          value_list
+%type <floats>              vector_elem
+%type <vector_elem_list>    vector_value_list
 %type <condition_list>      where
 %type <join_tuple_list>     join_list
 %type <join_tuple>          join
@@ -214,6 +225,8 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
 %type <sql_node>            command_wrapper
+%type <set_clause>          set_clause
+%type <set_clause_list>     set_clause_list
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -310,16 +323,33 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE ID RBRACE
+    CREATE INDEX ID ON ID LBRACE rel_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
-      create_index.attribute_name = $7;
+      create_index.unique = false;
+      if ($7 != nullptr) {
+        create_index.attributes.swap(*$7);
+        delete $7;
+      }
       free($3);
       free($5);
-      free($7);
+    }
+    | CREATE UNIQUE INDEX ID ON ID LBRACE rel_list RBRACE
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
+      CreateIndexSqlNode &create_index = $$->create_index;
+      create_index.index_name = $4;
+      create_index.relation_name = $6;
+      create_index.unique = true;
+      if ($8 != nullptr) {
+        create_index.attributes.swap(*$8);
+        delete $8;
+      }
+      free($4);
+      free($6);
     }
     ;
 
@@ -387,7 +417,13 @@ attr_def:
       $$ = new AttrInfoSqlNode;
       $$->type = (AttrType)$2;
       $$->name = $1;
-      $$->length = ((AttrType)$2 == AttrType::DATES) ? 8 : 4;
+      if ((AttrType)$2 == AttrType::DATES) {
+        $$->length = 8;
+      } else if ((AttrType)$2 == AttrType::CHARS) {
+        $$->length = 32;
+      } else {
+        $$->length = 4;
+      }
       free($1);
     }
     ;
@@ -459,7 +495,39 @@ value:
       free(tmp);
       free($1);
     }
+    | LBRACKET vector_elem vector_value_list RBRACKET {
+      vector<float>* cur = $3;
+      if($3 == nullptr){
+        cur = new vector<float>;
+      }
+      cur->push_back((float)$2);
+      std::reverse(cur->begin(), cur->end());
+      $$ = new Value(cur->data(), cur->size());
+      delete cur;
+    }
     ;
+vector_elem:
+    NUMBER {
+      $$ = (float)$1;
+      @$ = @1;
+    }
+    |FLOAT {
+      $$ = (float)$1;
+      @$ = @1;
+    }
+    ;
+vector_value_list:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | COMMA vector_elem vector_value_list{
+      $$ = $3;
+      if($$ == nullptr){
+        $$ = new vector<float>;
+      }
+      $$->push_back($2);
+    };
 storage_format:
     /* empty */
     {
@@ -484,20 +552,49 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-    UPDATE ID SET ID EQ value where 
-    {
-      $$ = new ParsedSqlNode(SCF_UPDATE);
-      $$->update.relation_name = $2;
-      $$->update.attribute_name = $4;
-      $$->update.value = *$6;
-      if ($7 != nullptr) {
-        $$->update.conditions.swap(*$7);
-        delete $7;
-      }
-      free($2);
-      free($4);
+  UPDATE ID SET set_clause_list where 
+  {
+    $$ = new ParsedSqlNode(SCF_UPDATE);
+    $$->update.relation_name = $2;
+    if ($4 != nullptr) {
+      $$->update.set_clauses.swap(*$4);
+      delete $4;
     }
-    ;
+    if ($5 != nullptr) {
+      $$->update.conditions.swap(*$5);
+      delete $5;
+    }
+    free($2);
+  }
+  ;
+
+set_clause_list:
+  set_clause {
+    $$ = new std::vector<SetClauseSqlNode>;
+    $$->emplace_back(*$1);
+    delete $1;
+  }
+  | set_clause COMMA set_clause_list
+  {
+    if ($3 != nullptr) {
+      $$ = $3;
+    } else {
+      $$ = new std::vector<SetClauseSqlNode>;
+    }
+    $$->emplace($$->begin(), *$1);
+    delete $1;
+  }
+  ;
+
+set_clause:
+  ID EQ value {
+    $$ = new SetClauseSqlNode;
+    $$->attribute_name = $1;
+    $$->value = *$3;
+    free($1);
+    delete $3;
+  }
+  ;
 select_stmt:        /*  select 语句的语法解析树*/
     SELECT expression_list FROM rel_list join_list where group_by
     {
@@ -574,6 +671,15 @@ expression:
     | LBRACE expression RBRACE {
       $$ = $2;
       $$->set_name(token_name(sql_string, &@$));
+    }
+    | L2_DISTANCE LBRACE expression COMMA expression RBRACE {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::L2_DIS, $3, $5, sql_string, &@$);
+    }
+    | COSINE_DISTANCE LBRACE expression COMMA expression RBRACE {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::COS_DIS, $3, $5, sql_string, &@$);
+    }
+    | INNER_PRODUCT LBRACE expression COMMA expression RBRACE {
+      $$ = create_arithmetic_expression(ArithmeticExpr::Type::INN_PDT, $3, $5, sql_string, &@$);
     }
     | '-' expression %prec UMINUS {
       $$ = create_arithmetic_expression(ArithmeticExpr::Type::NEGATIVE, $2, nullptr, sql_string, &@$);

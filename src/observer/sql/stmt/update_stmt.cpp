@@ -19,15 +19,12 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 #include "sql/parser/expression_binder.h"
 
-UpdateStmt::UpdateStmt(Table *table, Value *value, FilterStmt *filter_stmt, const FieldMeta &field):
-  table_(table), value_(value), filter_stmt_(filter_stmt), update_field_(field) {}
+UpdateStmt::UpdateStmt(Table *table, const std::vector<Value> &values, FilterStmt *filter_stmt, const std::vector<FieldMeta> &fields)
+: table_(table), values_(values), filter_stmt_(filter_stmt), fields_(fields)
+{}
 
-UpdateStmt::~UpdateStmt() {
-  if (value_ != nullptr) {
-    delete value_;
-    value_ = nullptr;
-  }
-
+UpdateStmt::~UpdateStmt()
+{
   if (filter_stmt_ != nullptr) {
     delete filter_stmt_;
     filter_stmt_ = nullptr;
@@ -36,10 +33,24 @@ UpdateStmt::~UpdateStmt() {
 
 RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
 {
-  const char *table_name = update.relation_name.c_str();
-  if (db == nullptr || table_name == nullptr || update.value.attr_type() == AttrType::UNDEFINED) {
-    LOG_WARN("invalid argument. db=%p, table_name=%p, value=%s", db, table_name,
-      update.value.to_string().c_str());
+  const char              *table_name = update.relation_name.c_str();
+  std::vector<std::string> attr_names;
+  std::vector<Value>       values;
+  for (const SetClauseSqlNode &set_clause : update.set_clauses) {
+    attr_names.push_back(set_clause.attribute_name);
+    values.push_back(set_clause.value);
+  }
+
+  bool undefined_attr_type = false;
+  for (const Value &value : values) {
+    if (value.attr_type() == AttrType::UNDEFINED) {
+      undefined_attr_type = true;
+      break;
+    }
+  }
+
+  if (db == nullptr || table_name == nullptr || undefined_attr_type) {
+    LOG_WARN("invalid argument. db=%p, table_name=%p", db, table_name);
     return RC::INVALID_ARGUMENT;
   }
 
@@ -51,27 +62,31 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
   }
 
   // check whether the field exists
-  const std::vector<FieldMeta> &field_metas      = *table->table_meta().field_metas();
-  const FieldMeta              *update_field     = nullptr;
-  bool                          update_col_found = false;
-  for (const FieldMeta &field_meta : field_metas) {
-    if (strcmp(field_meta.name(), update.attribute_name.c_str()) == 0) {
-      update_field     = &field_meta;
-      update_col_found = true;
-      break;
-    }
-  }
-  if (!update_col_found) {
-    LOG_WARN("attempt to update a non-existent col of a record. table_name: %s, col_name: %s",
-      table_name, update.attribute_name.c_str());
-    return RC::SCHEMA_FIELD_NOT_EXIST;
-  }
+  const std::vector<FieldMeta> &field_metas = *table->table_meta().field_metas();
+  // const FieldMeta              *update_field     = nullptr;
+  std::vector<FieldMeta> update_fields;
 
-  // check whether the type of field and value is the same
-  if (update.value.attr_type() != update_field->type()) {
-    LOG_WARN("value used to update record type %d does not match field `%s` type %d",
-      update.value.attr_type(), update_field->name(), update_field->type());
-    return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+  for (size_t i = 0; i < attr_names.size(); i++) {
+    bool update_col_found = false;
+    for (const FieldMeta &field_meta : field_metas) {
+      if (strcmp(field_meta.name(), attr_names[i].c_str()) == 0) {
+        update_fields.push_back(field_meta);
+        update_col_found = true;
+        break;
+      }
+    }
+    if (!update_col_found) {
+      LOG_WARN("attempt to update a non-existent col of a record. table_name: %s, col_name: %s",
+        table_name, attr_names[i].c_str());
+      return RC::SCHEMA_FIELD_NOT_EXIST;
+    }
+
+    // check whether the type of field and value is the same
+    if (values[i].attr_type() != update_fields[i].type()) {
+      LOG_WARN("value used to update record type %d does not match field `%s` type %d",
+        values[i].attr_type(), update_fields[i].name(), update_fields[i].type());
+      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
   }
 
   // 6. 绑定upadte.conditions中的表达式
@@ -115,6 +130,6 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
   }
 
   // everything alright
-  stmt = new UpdateStmt(table, new Value(update.value), filter_stmt, *update_field);
+  stmt = new UpdateStmt(table, values, filter_stmt, update_fields);
   return rc;
 }
