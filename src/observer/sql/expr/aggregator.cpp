@@ -95,6 +95,10 @@ RC CountAggregator::evaluate(Value &result)
   result = value_;
   return RC::SUCCESS;
 }
+RC CountAggregator::evaluate_default(Value &result) {
+  result = Value((int)0);
+  return RC::SUCCESS;
+}
 // 平均值
 RC AvgAggregator::accumulate(const Value &value)
 {

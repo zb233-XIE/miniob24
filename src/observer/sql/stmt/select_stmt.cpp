@@ -67,15 +67,6 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     table_map.insert({table_name, table});
   }
 
-  // debug
-  // for (size_t i = 0; i < select_sql.join_relations.size(); i ++) {
-  //   std::cout << select_sql.join_relations[i] << std::endl;
-  // }
-  // for (size_t i = 0; i < select_sql.join_conditions.size(); i ++) {
-  //   auto &ele = select_sql.join_conditions[i];
-  //   std::cout << ele->size() << std::endl;
-  // }
-
   // 将join语句中的表也加入到tables和table_map中，依葫芦画瓢
   for (size_t i = 0; i < select_sql.join_conditions.size(); i ++) {
     const char *table_name = select_sql.join_relations[i].c_str();
@@ -154,6 +145,29 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       }
     }
   }
+
+  // // 18. 绑定select_sql.having中的表达式
+  // for (ConditionSqlNode &condition : select_sql.having) {
+  //   RC rc = RC::SUCCESS;
+  //   if (condition.neither) {
+  //     vector<unique_ptr<Expression>> left_bound_expressions;
+  //     vector<unique_ptr<Expression>> right_bound_expressions;
+  //     std::unique_ptr<Expression> left_expr = std::unique_ptr<Expression>(condition.left_expr);
+  //     std::unique_ptr<Expression> right_expr = std::unique_ptr<Expression>(condition.right_expr);
+  //     rc = expression_binder.bind_expression(left_expr, left_bound_expressions);
+  //     if (OB_FAIL(rc)) {
+  //       LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+  //       return rc;
+  //     }
+  //     rc = expression_binder.bind_expression(right_expr, right_bound_expressions);
+  //     if (OB_FAIL(rc)) {
+  //       LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+  //       return rc;
+  //     }
+  //     condition.left_expr = left_bound_expressions[0].release();
+  //     condition.right_expr = right_bound_expressions[0].release();
+  //   }
+  // }
 
 
   vector<unique_ptr<Expression>> group_by_expressions;

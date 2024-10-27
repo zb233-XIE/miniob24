@@ -86,6 +86,7 @@ bool is_valid_date(const char *date) {
         CREATE
         DROP
         GROUP
+        HAVING
         TABLE
         TABLES
         INDEX
@@ -196,6 +197,7 @@ bool is_valid_date(const char *date) {
 %type <floats>              vector_elem
 %type <vector_elem_list>    vector_value_list
 %type <condition_list>      where
+%type <condition_list>      having
 %type <join_tuple_list>     join_list
 %type <join_tuple>          join
 %type <condition_list>      condition_list
@@ -596,7 +598,7 @@ set_clause:
   }
   ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list join_list where group_by
+    SELECT expression_list FROM rel_list join_list where group_by having
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -627,6 +629,12 @@ select_stmt:        /*  select 语句的语法解析树*/
       if ($7 != nullptr) {
         $$->selection.group_by.swap(*$7);
         delete $7;
+      }
+
+      // 处理having，having和where不能共存，先不考虑出现这种测试用例
+      if ($8 != nullptr) {
+        $$->selection.having.swap(*$8);
+        delete $8;
       }
     }
     ;
@@ -918,7 +926,22 @@ group_by:
     {
       $$ = nullptr;
     }
+    /* group by后面可以是表达式 */
+    | GROUP BY expression_list
+    {
+      $$ = $3;
+    }
     ;
+
+having:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | HAVING condition_list {
+      $$ = $2;
+    }
+
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
     {
