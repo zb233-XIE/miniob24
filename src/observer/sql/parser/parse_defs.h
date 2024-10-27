@@ -75,6 +75,12 @@ struct ConditionSqlNode
                                  ///< 1时，操作符右边是属性名，0时，是属性值
   RelAttrSqlNode right_attr;     ///< right-hand side attribute if right_is_attr = TRUE 右边的属性
   Value          right_value;    ///< right-hand side value if right_is_attr = FALSE
+
+  /// 6. 出现表达式
+  int neither = 0;
+  Expression *left_expr;
+  
+  Expression *right_expr;
 };
 
 /**
@@ -94,6 +100,10 @@ struct SelectSqlNode
   std::vector<std::string>                 relations;    ///< 查询的表
   std::vector<ConditionSqlNode>            conditions;   ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
+  std::vector<ConditionSqlNode>            having;       /// having条件
+  
+  std::vector<std::string>                     join_relations; /// 参与join的表
+  std::vector<std::vector<ConditionSqlNode> *> join_conditions; /// join两表之间的条件
 };
 
 /**
@@ -266,6 +276,7 @@ struct ErrorSqlNode
 enum SqlCommandFlag
 {
   SCF_ERROR = 0,
+  SCF_ERROR_AGGREGATION,
   SCF_CALC,
   SCF_SELECT,
   SCF_INSERT,

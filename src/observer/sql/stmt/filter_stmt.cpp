@@ -91,6 +91,17 @@ RC FilterStmt::create_filter_unit(Db *db, Table *default_table, std::unordered_m
 
   filter_unit = new FilterUnit;
 
+  if (condition.neither) {
+    // condition中的表达式已绑定，比如UnboundFieldExpr已经转换为了FiledExpr
+    filter_unit->set_flag(1);
+    filter_unit->set_left_expr(condition.left_expr);
+    filter_unit->set_right_expr(condition.right_expr);
+
+    filter_unit->set_comp(comp);
+
+    return rc;
+  }
+
   if (condition.left_is_attr) {
     Table           *table = nullptr;
     const FieldMeta *field = nullptr;

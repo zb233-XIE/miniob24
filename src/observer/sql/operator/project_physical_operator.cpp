@@ -64,7 +64,12 @@ Tuple *ProjectPhysicalOperator::current_tuple()
 RC ProjectPhysicalOperator::tuple_schema(TupleSchema &schema) const
 {
   for (const unique_ptr<Expression> &expression : expressions_) {
-    schema.append_cell(expression->name());
+    if (expression->type() == ExprType::FIELD && !get_multi_tables_flag()) { // 单表查询
+      FieldExpr *field_expr = static_cast<FieldExpr *>(expression.get());
+      schema.append_cell(field_expr->field().meta()->name());
+    } else {
+      schema.append_cell(expression->name());
+    }
   }
   return RC::SUCCESS;
 }

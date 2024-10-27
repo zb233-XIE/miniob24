@@ -13,7 +13,10 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/type/attr_type.h"
 #include "common/type/char_type.h"
+#include "common/type/data_type.h"
 #include "common/value.h"
+#include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -43,11 +46,11 @@ bool CharType::cast_to_vector(char* src, Value& result) const
     for(int i=0; i<len; i++){
       char*& elem_str = elems_str[i];
       elem_str = common::strip(elem_str);
-      int sz = std::strlen(elem_str);
+      size_t sz = std::strlen(elem_str);
       size_t pos;
       try {
         *(elems + i) = std::stof(elem_str, &pos);
-      } catch (const std::invalid_argument err) {
+      } catch (const std::invalid_argument& err) {
         LOG_INFO("Invalid input: %s is not a valid float", elem_str);
         delete [] elems;
         return false;
@@ -68,6 +71,16 @@ bool CharType::cast_to_vector(char* src, Value& result) const
 RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
 {
   switch (type) {
+    case AttrType::INTS: {
+      int res = atoi(val.get_string().c_str());
+      result = Value((int)res);
+      break;
+    }
+    case AttrType::FLOATS: {
+      float res = atof(val.get_string().c_str());
+      result = Value((float)res);
+      break;
+    }
     case AttrType::VECTORS: {
       char* src = val.value_.pointer_value_;
       if(cast_to_vector(src, result)){
@@ -88,6 +101,12 @@ int CharType::cast_cost(AttrType type)
     return 0;
   } else if(type == AttrType::VECTORS){
     return 1;
+  }
+  if (type == AttrType::INTS) { // char转可以转int
+    return 0;
+  }
+  if (type == AttrType::FLOATS) { // char可以转float
+    return 0;
   }
   return INT32_MAX;
 }

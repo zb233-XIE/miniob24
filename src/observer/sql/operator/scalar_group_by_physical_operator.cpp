@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/scalar_group_by_physical_operator.h"
 #include "sql/expr/expression_tuple.h"
 #include "sql/expr/composite_tuple.h"
+#include <memory>
 
 using namespace std;
 using namespace common;
@@ -85,6 +86,13 @@ RC ScalarGroupByPhysicalOperator::open(Trx *trx)
   // 得到最终聚合后的值
   if (group_value_) {
     rc = evaluate(*group_value_);
+  }
+
+  // 没有聚合到任何值，可能是因为where把所有record都过滤了
+  // 为了防止什么都不打印，此时需要输出一些默认值
+  // 对于count，输出0；sum，min，max，avg都输出NULL（mysql的输出）
+  if (group_value_ == nullptr) {
+    group_value_ = unique_ptr<GroupValueType>(evaluate_default());
   }
 
   emitted_ = false;

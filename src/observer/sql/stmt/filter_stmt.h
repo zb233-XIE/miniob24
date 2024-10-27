@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/expression.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/stmt/stmt.h"
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
@@ -53,16 +54,27 @@ public:
 
   CompOp comp() const { return comp_; }
 
+  int flag() const { return neither_; }
+
   void set_left(const FilterObj &obj) { left_ = obj; }
   void set_right(const FilterObj &obj) { right_ = obj; }
+  void set_flag(const int flag) { neither_ = flag; }
+  void set_left_expr(Expression *expr) { left_expr_ = expr; }
+  void set_right_expr(Expression *expr) { right_expr_ = expr; }
 
   const FilterObj &left() const { return left_; }
   const FilterObj &right() const { return right_; }
+  Expression *left_expr() const { return left_expr_; }
+  Expression *right_expr() const { return right_expr_; }
+
 
 private:
   CompOp    comp_ = NO_OP;
   FilterObj left_;
   FilterObj right_;
+  int neither_;
+  Expression *left_expr_;
+  Expression *right_expr_;
 };
 
 /**
