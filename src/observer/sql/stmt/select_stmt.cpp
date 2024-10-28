@@ -35,6 +35,10 @@ SelectStmt::~SelectStmt()
     delete filter_stmt;
     filter_stmt = nullptr;
   }
+  if (nullptr != having_filter_stmt_) {
+    delete having_filter_stmt_;
+    having_filter_stmt_ = nullptr;
+  }
 }
 
 RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
@@ -146,28 +150,28 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     }
   }
 
-  // // 18. 绑定select_sql.having中的表达式
-  // for (ConditionSqlNode &condition : select_sql.having) {
-  //   RC rc = RC::SUCCESS;
-  //   if (condition.neither) {
-  //     vector<unique_ptr<Expression>> left_bound_expressions;
-  //     vector<unique_ptr<Expression>> right_bound_expressions;
-  //     std::unique_ptr<Expression> left_expr = std::unique_ptr<Expression>(condition.left_expr);
-  //     std::unique_ptr<Expression> right_expr = std::unique_ptr<Expression>(condition.right_expr);
-  //     rc = expression_binder.bind_expression(left_expr, left_bound_expressions);
-  //     if (OB_FAIL(rc)) {
-  //       LOG_INFO("bind expression failed. rc=%s", strrc(rc));
-  //       return rc;
-  //     }
-  //     rc = expression_binder.bind_expression(right_expr, right_bound_expressions);
-  //     if (OB_FAIL(rc)) {
-  //       LOG_INFO("bind expression failed. rc=%s", strrc(rc));
-  //       return rc;
-  //     }
-  //     condition.left_expr = left_bound_expressions[0].release();
-  //     condition.right_expr = right_bound_expressions[0].release();
-  //   }
-  // }
+  // 18. 绑定select_sql.having中的表达式
+  for (ConditionSqlNode &condition : select_sql.having) {
+    RC rc = RC::SUCCESS;
+    if (condition.neither) {
+      vector<unique_ptr<Expression>> left_bound_expressions;
+      vector<unique_ptr<Expression>> right_bound_expressions;
+      std::unique_ptr<Expression> left_expr = std::unique_ptr<Expression>(condition.left_expr);
+      std::unique_ptr<Expression> right_expr = std::unique_ptr<Expression>(condition.right_expr);
+      rc = expression_binder.bind_expression(left_expr, left_bound_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+      rc = expression_binder.bind_expression(right_expr, right_bound_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+      condition.left_expr = left_bound_expressions[0].release();
+      condition.right_expr = right_bound_expressions[0].release();
+    }
+  }
 
 
   vector<unique_ptr<Expression>> group_by_expressions;
@@ -220,6 +224,19 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     delete conditions;
   }
 
+  // 18. 为having构造filter statement
+  FilterStmt *having_filter_stmt = nullptr;
+  rc                             = FilterStmt::create(db,
+      default_table,
+      &table_map,
+      select_sql.having.data(),
+      static_cast<int>(select_sql.having.size()),
+      having_filter_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct filter stmt");
+    return rc;
+  }
+
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
 
@@ -228,6 +245,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);
   select_stmt->join_filter_stmts_.swap(filter_stmts);
+  select_stmt->having_filter_stmt_ = having_filter_stmt;
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }

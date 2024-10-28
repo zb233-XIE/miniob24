@@ -721,7 +721,7 @@ expression:
       $$ = create_aggregate_expression("avg", $3, sql_string, &@$);
     }
     | SUM LBRACE agg_fun_attr_list RBRACE {
-      $$ = create_aggregate_expression("avg", $3, sql_string, &@$);
+      $$ = create_aggregate_expression("sum", $3, sql_string, &@$);
     }
     ;
 agg_fun_attr_list:
@@ -750,13 +750,10 @@ agg_fun_attr:
     | '*' {
       $$ = new StarExpr();
     }
-    | ID {
-      RelAttrSqlNode *node = new RelAttrSqlNode;
-      node->attribute_name = $1;
-      $$ = new UnboundFieldExpr(node->relation_name, node->attribute_name);
+    | rel_attr {
+      $$ = new UnboundFieldExpr($1->relation_name, $1->attribute_name);
       $$->set_name(token_name(sql_string, &@$));
-      delete node;
-      free($1);
+      delete $1;
     }
     ;
 
