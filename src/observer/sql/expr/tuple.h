@@ -207,6 +207,15 @@ public:
       len /= sizeof(float);
     }
     cell.set_data(data, len);
+
+    // check if cell is null
+    if (field_meta->nullable()) {
+      int32_t *null_flag = (int32_t *)(this->record_->data() + field_meta->offset());
+      if (*null_flag == NULL_MAGIC_NUMBER) {
+        cell.set_null();
+      }
+    }
+
     return RC::SUCCESS;
   }
 

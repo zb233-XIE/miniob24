@@ -237,6 +237,7 @@ public:
 
   void         get_value(Value &value) const { value = value_; }
   const Value &get_value() const { return value_; }
+  const bool  is_null() const { return value_.get_null(); }
 
 private:
   Value value_;

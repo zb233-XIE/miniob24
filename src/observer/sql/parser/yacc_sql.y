@@ -133,6 +133,8 @@ bool is_valid_date(const char *date) {
         NE
         LK
         NLK
+        IS_T
+        IS_NOT_T
         MAX
         MIN
         COUNT
@@ -146,6 +148,9 @@ bool is_valid_date(const char *date) {
         L2_DISTANCE
         COSINE_DISTANCE
         INNER_PRODUCT
+        NULLABLE
+        NOT_NULL
+        NULL_VALUE
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -172,6 +177,7 @@ bool is_valid_date(const char *date) {
   int                                        number;
   float                                      floats;
   char *                                     date;
+  bool                                       nullable_spec;
 }
 
 %token <number> NUMBER
@@ -229,6 +235,8 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            command_wrapper
 %type <set_clause>          set_clause
 %type <set_clause_list>     set_clause_list
+%type <nullable_spec>       nullable_spec
+
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
@@ -406,29 +414,38 @@ attr_def_list:
     ;
     
 attr_def:
-    ID type LBRACE number RBRACE 
-    {
-      $$ = new AttrInfoSqlNode;
-      $$->type = (AttrType)$2;
-      $$->name = $1;
-      $$->length = $4;
-      free($1);
+  ID type LBRACE number RBRACE nullable_spec
+  {
+    $$ = new AttrInfoSqlNode;
+    $$->type = (AttrType)$2;
+    $$->name = $1;
+    $$->length = $4;
+    $$->nullable = $6;
+    free($1);
+  }
+  | ID type nullable_spec
+  {
+    $$ = new AttrInfoSqlNode;
+    $$->type = (AttrType)$2;
+    $$->name = $1;
+    if ((AttrType)$2 == AttrType::DATES) {
+    $$->length = 8;
+    } else if ((AttrType)$2 == AttrType::CHARS) {
+    $$->length = 32;
+    } else {
+    $$->length = 4;
     }
-    | ID type
-    {
-      $$ = new AttrInfoSqlNode;
-      $$->type = (AttrType)$2;
-      $$->name = $1;
-      if ((AttrType)$2 == AttrType::DATES) {
-        $$->length = 8;
-      } else if ((AttrType)$2 == AttrType::CHARS) {
-        $$->length = 32;
-      } else {
-        $$->length = 4;
-      }
-      free($1);
-    }
-    ;
+    $$->nullable = $3;
+    free($1);
+  }
+  ;
+
+nullable_spec:
+  NULLABLE { $$ = true; }
+  | NOT_NULL { $$ = false; }
+  | /* empty */ { $$ = false; }
+  ;
+
 number:
     NUMBER {$$ = $1;}
     ;
@@ -506,6 +523,10 @@ value:
       std::reverse(cur->begin(), cur->end());
       $$ = new Value(cur->data(), cur->size());
       delete cur;
+    }
+    | NULL_VALUE {
+      $$ = new Value();
+      $$->set_null();
     }
     ;
 vector_elem:
@@ -918,6 +939,8 @@ comp_op:
     | NE { $$ = NOT_EQUAL; }
     | LK { $$ = LIKE; }
     | NLK {$$ = NOT_LIKE; }
+    | IS_T { $$ = IS; }
+    | IS_NOT_T { $$ = IS_NOT; }
     ;
 
 // your code here

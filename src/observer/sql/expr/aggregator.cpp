@@ -26,8 +26,9 @@ RC SumAggregator::accumulate(const Value &value)
   
   ASSERT(value.attr_type() == value_.attr_type(), "type mismatch. value type: %s, value_.type: %s", 
         attr_type_to_string(value.attr_type()), attr_type_to_string(value_.attr_type()));
-  
-  Value::add(value, value_, value_);
+  if (!value.get_null()) {
+    Value::add(value, value_, value_);
+  }
   return RC::SUCCESS;
 }
 
@@ -48,7 +49,7 @@ RC MinAggregator::accumulate(const Value &value)
   ASSERT(value.attr_type() == value_.attr_type(), "type mismatch. value type: %s, value_.type: %s", 
         attr_type_to_string(value.attr_type()), attr_type_to_string(value_.attr_type()));
   
-  if (value.compare(value_) < 0) {
+  if (!value.get_null() && value.compare(value_) < 0) {
     value_ = value;
   }
   return RC::SUCCESS;
@@ -68,7 +69,7 @@ RC MaxAggregator::accumulate(const Value &value)
   ASSERT(value.attr_type() == value_.attr_type(), "type mismatch. value type: %s, value_.type: %s", 
         attr_type_to_string(value.attr_type()), attr_type_to_string(value_.attr_type()));
   
-  if (value.compare(value_) > 0) {
+  if (!value.get_null() && value.compare(value_) > 0) {
     value_ = value;
   }
   return RC::SUCCESS;
@@ -82,10 +83,12 @@ RC MaxAggregator::evaluate(Value &result)
 RC CountAggregator::accumulate(const Value &value)
 {
   // count并不关心value的值，每进一次这个函数，就让计数器加1
-  Value v((int)1);
   if (value_.attr_type() == AttrType::UNDEFINED) { // 第一次进入
-    value_ = v;
-  } else {
+    value_ = Value(0);
+  }
+
+  if (!value.get_null()) {
+    Value v((int)1);
     Value::add(v, value_, value_);
   }
   return RC::SUCCESS;
@@ -113,8 +116,10 @@ RC AvgAggregator::accumulate(const Value &value)
       return RC::SUCCESS;
     }
   }
-  Value::add(value, value_, value_);
-  count_++;
+  if (!value.get_null()) {
+    Value::add(value, value_, value_);
+    count_++;
+  }
   return RC::SUCCESS;
 }
 RC AvgAggregator::evaluate(Value &result)

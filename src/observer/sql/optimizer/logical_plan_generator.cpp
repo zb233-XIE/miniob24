@@ -206,7 +206,13 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
                                          : static_cast<Expression *>(new ValueExpr(filter_obj_right.value)));
     }
 
-    if (left->value_type() != right->value_type()) {
+    ValueExpr *left_value_expr = dynamic_cast<ValueExpr*>(filter_unit->left_expr());
+    bool left_null = left_value_expr != nullptr && left_value_expr->is_null();
+    ValueExpr *right_value_expr = dynamic_cast<ValueExpr*>(filter_unit->right_expr());
+    bool right_null = right_value_expr != nullptr && right_value_expr->is_null();
+    bool has_null = left_null || right_null;
+
+    if (left->value_type() != right->value_type() && !has_null) {
       auto left_to_right_cost = implicit_cast_cost(left->value_type(), right->value_type());
       auto right_to_left_cost = implicit_cast_cost(right->value_type(), left->value_type());
       if (left_to_right_cost <= right_to_left_cost && left_to_right_cost != INT32_MAX) {

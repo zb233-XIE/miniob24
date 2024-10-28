@@ -152,6 +152,11 @@ RC VectorType::cosine_distance(const Value &left, const Value &right, Value &res
 
 RC VectorType::to_string(const Value &val, string &result) const
 {
+  if (val.get_null()) {
+    result = "NULL";
+    return RC::SUCCESS;
+  }
+
   stringstream ss;
   ss << "[";
   string str;

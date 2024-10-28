@@ -276,7 +276,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &    value = values[i];
-    if (field->type() != value.attr_type()) {
+    if (field->type() != value.attr_type() && !value.get_null()) {
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);
       if (OB_FAIL(rc)) {
@@ -313,7 +313,14 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
       return RC::INVALID_ARGUMENT;
     }
   }
-  memcpy(record_data + field->offset(), value.data(), copy_len);
+
+  if (value.get_null() == 1) {
+    // set value to null magic number
+    *(int32_t*)(record_data + field->offset()) = NULL_MAGIC_NUMBER;
+  } else {
+    memcpy(record_data + field->offset(), value.data(), copy_len);
+  }
+
   return RC::SUCCESS;
 }
 
