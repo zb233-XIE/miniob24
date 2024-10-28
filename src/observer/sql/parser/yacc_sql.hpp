@@ -121,15 +121,14 @@ extern int yydebug;
     L2_DISTANCE = 322,             /* L2_DISTANCE  */
     COSINE_DISTANCE = 323,         /* COSINE_DISTANCE  */
     INNER_PRODUCT = 324,           /* INNER_PRODUCT  */
-    NULLABLE = 325,                /* NULLABLE  */
-    NOT_NULL = 326,                /* NOT_NULL  */
-    NULL_VALUE = 327,              /* NULL_VALUE  */
-    NUMBER = 328,                  /* NUMBER  */
-    FLOAT = 329,                   /* FLOAT  */
-    ID = 330,                      /* ID  */
-    SSS = 331,                     /* SSS  */
-    DATE = 332,                    /* DATE  */
-    UMINUS = 333                   /* UMINUS  */
+    NULL_T = 325,                  /* NULL_T  */
+    NOT_NULL_T = 326,              /* NOT_NULL_T  */
+    NUMBER = 327,                  /* NUMBER  */
+    FLOAT = 328,                   /* FLOAT  */
+    ID = 329,                      /* ID  */
+    SSS = 330,                     /* SSS  */
+    DATE = 331,                    /* DATE  */
+    UMINUS = 332                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -138,7 +137,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 156 "yacc_sql.y"
+#line 155 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -165,7 +164,7 @@ union YYSTYPE
   char *                                     date;
   bool                                       nullable_spec;
 
-#line 169 "yacc_sql.hpp"
+#line 168 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

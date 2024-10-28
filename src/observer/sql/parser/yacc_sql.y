@@ -148,9 +148,8 @@ bool is_valid_date(const char *date) {
         L2_DISTANCE
         COSINE_DISTANCE
         INNER_PRODUCT
-        NULLABLE
-        NOT_NULL
-        NULL_VALUE
+        NULL_T
+        NOT_NULL_T
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -441,8 +440,8 @@ attr_def:
   ;
 
 nullable_spec:
-  NULLABLE { $$ = true; }
-  | NOT_NULL { $$ = false; }
+  NULL_T { $$ = true; }
+  | NOT_NULL_T { $$ = false; }
   | /* empty */ { $$ = false; }
   ;
 
@@ -524,7 +523,7 @@ value:
       $$ = new Value(cur->data(), cur->size());
       delete cur;
     }
-    | NULL_VALUE {
+    | NULL_T {
       $$ = new Value();
       $$->set_null();
     }
