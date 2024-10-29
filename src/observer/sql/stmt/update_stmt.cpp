@@ -74,15 +74,29 @@ RC UpdateStmt::get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value)
 
   // cast physical operator to project operator unique ptr
   ProjectPhysicalOperator *project_oper = dynamic_cast<ProjectPhysicalOperator *>(physical_oper.get());
-  project_oper->open(nullptr);
-  project_oper->next();
+  rc = project_oper->open(nullptr);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to open subquery operator. rc=%d:%s", rc, strrc(rc));
+    return rc;
+  }
+  rc = project_oper->next();
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get subquery result. rc=%d:%s", rc, strrc(rc));
+    return rc;
+  }
 
   Tuple *tuple = project_oper->current_tuple();
-	if (tuple->cell_num() != 1) {
-		LOG_WARN("subquery result should have only one column");
-		return RC::INVALID_ARGUMENT;
-	}
-  tuple->cell_at(0, value);
+  if (tuple == nullptr) {
+    LOG_WARN("subquery result is empty");
+    return RC::NOTFOUND;
+  }
+
+  rc = tuple->cell_at(0, value);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get subquery value. rc=%d:%s", rc, strrc(rc));
+    return rc;
+  }
+
 	return rc;
 }
 
