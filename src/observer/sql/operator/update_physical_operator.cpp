@@ -33,6 +33,11 @@ RC UpdatePhysicalOperator::open(Trx *trx) {
     memcpy(updated_data, record.data(), record.len());
 
     for (size_t i = 0; i < fields_.size(); i++) {
+      if (values_[i].get_null()) {
+        *(int32_t *)(updated_data + fields_[i].offset()) = NULL_MAGIC_NUMBER;
+        continue;
+      }
+      
       const FieldMeta &field = fields_[i];
       if (field.type() == AttrType::CHARS) {
         memset(updated_data + field.offset(), 0, field.len());

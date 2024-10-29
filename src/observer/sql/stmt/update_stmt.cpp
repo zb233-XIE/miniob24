@@ -43,7 +43,7 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
 
   bool undefined_attr_type = false;
   for (const Value &value : values) {
-    if (value.attr_type() == AttrType::UNDEFINED) {
+    if (value.attr_type() == AttrType::UNDEFINED && !value.get_null()) {  // invalid date value
       undefined_attr_type = true;
       break;
     }
@@ -82,10 +82,16 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
     }
 
     // check whether the type of field and value is the same
-    if (values[i].attr_type() != update_fields[i].type()) {
+    if (values[i].attr_type() != update_fields[i].type() && !values[i].get_null()) {
       LOG_WARN("value used to update record type %d does not match field `%s` type %d",
         values[i].attr_type(), update_fields[i].name(), update_fields[i].type());
       return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+    }
+
+    // check if the field is not null and value is null
+    if (values[i].get_null() && !update_fields[i].nullable()) {
+      LOG_WARN("field `%s` is not nullable, but value is null", update_fields[i].name());
+      return RC::FIELD_NOT_NULL_VIOLATION;
     }
   }
 
