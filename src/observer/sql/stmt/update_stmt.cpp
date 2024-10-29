@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/stmt/update_stmt.h"
 #include "common/log/log.h"
+#include "event/sql_debug.h"
 #include "sql/operator/logical_operator.h"
 #include "sql/operator/project_physical_operator.h"
 #include "sql/optimizer/logical_plan_generator.h"
@@ -88,6 +89,7 @@ RC UpdateStmt::get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value)
       return RC::NOTFOUND;
     }
 
+    sql_debug("update-select subquery get a tuple: %s", tuple->to_string().c_str());
     Value val;
     rc = tuple->cell_at(0, val);
     if (rc != RC::SUCCESS) {

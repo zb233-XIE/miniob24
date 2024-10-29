@@ -1,4 +1,5 @@
 #include "sql/operator/update_physical_operator.h"
+#include "event/sql_debug.h"
 #include "storage/trx/trx.h"
 
 RC UpdatePhysicalOperator::open(Trx *trx) {
@@ -20,6 +21,7 @@ RC UpdatePhysicalOperator::open(Trx *trx) {
       LOG_WARN("failed to get current record: %s", strrc(rc));
       return rc;
     }
+    sql_debug("update got a tuple: %s", tuple->to_string().c_str());
 
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
     Record   &record    = row_tuple->record();
