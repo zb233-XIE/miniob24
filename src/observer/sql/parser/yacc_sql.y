@@ -442,7 +442,7 @@ attr_def:
 nullable_spec:
   NULL_T { $$ = true; }
   | NOT_NULL_T { $$ = false; }
-  | /* empty */ { $$ = false; }
+  | /* empty */ { $$ = true; }
   ;
 
 number:

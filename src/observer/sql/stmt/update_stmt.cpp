@@ -101,8 +101,7 @@ RC UpdateStmt::get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value)
 
   if (values.empty()) {
     sql_debug("subquery result is empty, set value to null");
-    value.set_value(Value(0));
-    // value.set_null();
+    value.set_null();
     return RC::SUCCESS;
   }
 

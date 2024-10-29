@@ -2069,7 +2069,7 @@ yyreduce:
 
   case 42: /* nullable_spec: %empty  */
 #line 445 "yacc_sql.y"
-                { (yyval.nullable_spec) = false; }
+                { (yyval.nullable_spec) = true; }
 #line 2074 "yacc_sql.cpp"
     break;
 
