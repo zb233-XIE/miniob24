@@ -613,8 +613,17 @@ set_clause:
     $$ = new SetClauseSqlNode;
     $$->attribute_name = $1;
     $$->value = *$3;
+    $$->has_subquery = false;
+    $$->subquery = nullptr;
     free($1);
     delete $3;
+  }
+  | ID EQ LBRACE select_stmt RBRACE {
+    $$ = new SetClauseSqlNode;
+    $$->attribute_name = $1;
+    $$->has_subquery = true;
+    $$->subquery = $4;
+    free($1);
   }
   ;
 select_stmt:        /*  select 语句的语法解析树*/

@@ -14,7 +14,13 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/stmt/update_stmt.h"
 #include "common/log/log.h"
+#include "sql/operator/logical_operator.h"
+#include "sql/operator/project_physical_operator.h"
+#include "sql/optimizer/logical_plan_generator.h"
+#include "sql/optimizer/optimize_stage.h"
+#include "sql/optimizer/physical_plan_generator.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/select_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include "sql/parser/expression_binder.h"
@@ -31,6 +37,55 @@ UpdateStmt::~UpdateStmt()
   }
 }
 
+RC UpdateStmt::get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value) {
+  Stmt *subquery_stmt = nullptr;
+  RC rc = Stmt::create_stmt(db, *subquery, subquery_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create subquery stmt. rc=%d:%s", rc, strrc(rc));
+    return rc;
+  }
+  SelectStmt *subquery_select_stmt = dynamic_cast<SelectStmt *>(subquery_stmt);
+  if (subquery_select_stmt == nullptr) {
+    LOG_WARN("subquery stmt is not a select stmt");
+    return RC::INVALID_ARGUMENT;
+  }
+
+  LogicalPlanGenerator logical_generator;
+  PhysicalPlanGenerator physical_generator;
+  OptimizeStage opt_stage;
+
+  unique_ptr<LogicalOperator> logical_oper;
+  unique_ptr<PhysicalOperator> physical_oper;
+  rc = logical_generator.create(subquery_select_stmt, logical_oper);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create logical operator. rc=%d:%s", rc, strrc(rc));
+    return rc;
+  }
+  rc = opt_stage.rewrite(logical_oper);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to rewrite logical operator. rc=%d:%s", rc, strrc(rc));
+    return rc;
+  }
+  rc = physical_generator.create(*logical_oper, physical_oper);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create physical operator. rc=%d:%s", rc, strrc(rc));
+    return rc;
+  }
+
+  // cast physical operator to project operator unique ptr
+  ProjectPhysicalOperator *project_oper = dynamic_cast<ProjectPhysicalOperator *>(physical_oper.get());
+  project_oper->open(nullptr);
+  project_oper->next();
+
+  Tuple *tuple = project_oper->current_tuple();
+	if (tuple->cell_num() != 1) {
+		LOG_WARN("subquery result should have only one column");
+		return RC::INVALID_ARGUMENT;
+	}
+  tuple->cell_at(0, value);
+	return rc;
+}
+
 RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
 {
   const char              *table_name = update.relation_name.c_str();
@@ -38,7 +93,17 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
   std::vector<Value>       values;
   for (const SetClauseSqlNode &set_clause : update.set_clauses) {
     attr_names.push_back(set_clause.attribute_name);
-    values.push_back(set_clause.value);
+    if (set_clause.has_subquery) {
+      Value value;
+			RC rc = get_subquery_value(db, set_clause.subquery, value);
+			if (rc != RC::SUCCESS) {
+				LOG_WARN("failed to get subquery value. rc=%d:%s", rc, strrc(rc));
+				return rc;
+			}
+      values.push_back(value);
+    } else {
+      values.push_back(set_clause.value);
+    }
   }
 
   bool undefined_attr_type = false;

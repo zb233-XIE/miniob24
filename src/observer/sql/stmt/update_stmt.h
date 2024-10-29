@@ -42,6 +42,7 @@ public:
   StmtType                      type() const override { return StmtType::UPDATE; }
 
 private:
+  static RC              get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value);
   Table                 *table_ = nullptr;
   std::vector<Value>     values_;
   FilterStmt            *filter_stmt_ = nullptr;

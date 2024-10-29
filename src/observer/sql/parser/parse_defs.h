@@ -138,10 +138,14 @@ struct DeleteSqlNode
   std::vector<ConditionSqlNode> conditions;
 };
 
+class ParsedSqlNode;
+
 struct SetClauseSqlNode
 {
+  bool has_subquery;
   std::string attribute_name; 
   Value       value;
+  ParsedSqlNode *subquery;
 };
 
 /**
