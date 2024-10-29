@@ -107,7 +107,7 @@ RC UpdateStmt::get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value)
 
   if (values.size() > 1) {
     sql_debug("subquery result has %d rows, error", values.size());
-    return RC::INVALID_ARGUMENT;
+    // return RC::INVALID_ARGUMENT;
   }
 
   value = values[0];
