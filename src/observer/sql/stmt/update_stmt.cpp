@@ -79,24 +79,30 @@ RC UpdateStmt::get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value)
     LOG_WARN("failed to open subquery operator. rc=%d:%s", rc, strrc(rc));
     return rc;
   }
-  rc = project_oper->next();
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get subquery result. rc=%d:%s", rc, strrc(rc));
-    return rc;
+
+  std::vector<Value> values;
+  while (project_oper->next() == RC::SUCCESS) {
+    Tuple *tuple = project_oper->current_tuple();
+    if (tuple == nullptr) {
+      LOG_WARN("subquery result is empty");
+      return RC::NOTFOUND;
+    }
+
+    Value val;
+    rc = tuple->cell_at(0, val);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get subquery value. rc=%d:%s", rc, strrc(rc));
+      return rc;
+    }
+    values.push_back(val);
   }
 
-  Tuple *tuple = project_oper->current_tuple();
-  if (tuple == nullptr) {
-    LOG_WARN("subquery result is empty");
-    return RC::NOTFOUND;
+  if (values.size() != 1) {
+    LOG_WARN("subquery result get multiple values");
+    return RC::INVALID_ARGUMENT;
   }
 
-  rc = tuple->cell_at(0, value);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get subquery value. rc=%d:%s", rc, strrc(rc));
-    return rc;
-  }
-
+  value = values[0];
 	return rc;
 }
 
