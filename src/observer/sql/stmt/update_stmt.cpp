@@ -99,8 +99,14 @@ RC UpdateStmt::get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value)
     values.push_back(val);
   }
 
-  if (values.size() != 1) {
-    LOG_WARN("subquery result get multiple values");
+  if (values.empty()) {
+    sql_debug("subquery result is empty, set value to null");
+    value.set_null();
+    return RC::SUCCESS;
+  }
+
+  if (values.size() > 1) {
+    sql_debug("subquery result has %d rows, error", values.size());
     return RC::INVALID_ARGUMENT;
   }
 
