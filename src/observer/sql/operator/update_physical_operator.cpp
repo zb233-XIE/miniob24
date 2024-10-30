@@ -30,6 +30,10 @@ RC UpdatePhysicalOperator::open(Trx *trx) {
 
   child->close();
 
+  if (!records_.empty() && subq_multi_results_flag_) {
+    return RC::INVALID_ARGUMENT;
+  }
+
   for (Record &record: records_) {
     char *updated_data = new char[record.len()];
     memcpy(updated_data, record.data(), record.len());

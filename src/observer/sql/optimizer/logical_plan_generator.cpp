@@ -314,6 +314,7 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
   FilterStmt                 *filter_stmt = update_stmt->filter_stmt();
   std::vector<Value> values = update_stmt->values();
   std::vector<FieldMeta> fields = update_stmt->fields();
+  bool subq_multi_results_flag = update_stmt->subq_multi_results_flag();
 
   unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
 
@@ -324,7 +325,7 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
     return rc;
   }
 
-  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, values, fields));
+  unique_ptr<LogicalOperator> update_oper(new UpdateLogicalOperator(table, values, fields, subq_multi_results_flag));
 
   if (predicate_oper) {
     predicate_oper->add_child(std::move(table_get_oper));

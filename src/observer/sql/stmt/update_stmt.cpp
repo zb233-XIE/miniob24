@@ -26,8 +26,8 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 #include "sql/parser/expression_binder.h"
 
-UpdateStmt::UpdateStmt(Table *table, const std::vector<Value> &values, FilterStmt *filter_stmt, const std::vector<FieldMeta> &fields)
-: table_(table), values_(values), filter_stmt_(filter_stmt), fields_(fields)
+UpdateStmt::UpdateStmt(Table *table, const std::vector<Value> &values, FilterStmt *filter_stmt, const std::vector<FieldMeta> &fields, bool subq_multi_results_flag)
+: table_(table), values_(values), filter_stmt_(filter_stmt), fields_(fields), subq_multi_results_flag_(subq_multi_results_flag)
 {}
 
 UpdateStmt::~UpdateStmt()
@@ -38,7 +38,7 @@ UpdateStmt::~UpdateStmt()
   }
 }
 
-RC UpdateStmt::get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value) {
+RC UpdateStmt::get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value, bool &subq_multi_results_flag) {
   Stmt *subquery_stmt = nullptr;
   RC rc = Stmt::create_stmt(db, *subquery, subquery_stmt);
   if (rc != RC::SUCCESS) {
@@ -106,16 +106,19 @@ RC UpdateStmt::get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value)
   }
 
   if (values.size() > 1) {
-    sql_debug("subquery result has %d rows, error", values.size());
-    // return RC::INVALID_ARGUMENT;
+    sql_debug("subquery result has %d rows, set value to null", values.size());
+    subq_multi_results_flag = true;
+    value.set_null();
+  } else {
+    value = values[0];
   }
 
-  value = values[0];
 	return rc;
 }
 
 RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
 {
+  bool subq_multi_results_flag = false;
   const char              *table_name = update.relation_name.c_str();
   std::vector<std::string> attr_names;
   std::vector<Value>       values;
@@ -123,7 +126,7 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
     attr_names.push_back(set_clause.attribute_name);
     if (set_clause.has_subquery) {
       Value value;
-			RC rc = get_subquery_value(db, set_clause.subquery, value);
+			RC rc = get_subquery_value(db, set_clause.subquery, value,subq_multi_results_flag);
 			if (rc != RC::SUCCESS) {
 				LOG_WARN("failed to get subquery value. rc=%d:%s", rc, strrc(rc));
 				return rc;
@@ -229,6 +232,6 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
   }
 
   // everything alright
-  stmt = new UpdateStmt(table, values, filter_stmt, update_fields);
+  stmt = new UpdateStmt(table, values, filter_stmt, update_fields, subq_multi_results_flag);
   return rc;
 }
