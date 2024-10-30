@@ -28,7 +28,7 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table, const std::vector<Value> &values, FilterStmt *filter_stmt, const std::vector<FieldMeta> &fields, bool subq_multi_results_flag);
+  UpdateStmt(Table *table, const std::vector<Value> &values, FilterStmt *filter_stmt, const std::vector<FieldMeta> &fields, bool update_internal_error);
   ~UpdateStmt() override;
 
 public:
@@ -40,13 +40,13 @@ public:
   const std::vector<FieldMeta> &fields() const { return fields_; }
   FilterStmt                   *filter_stmt() const { return filter_stmt_; }
   StmtType                      type() const override { return StmtType::UPDATE; }
-  const bool                    subq_multi_results_flag() const { return subq_multi_results_flag_; }
+  const bool                    update_internal_error() const { return update_internal_error_; }
 
 private:
-  static RC              get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value, bool &subq_multi_results_flag);
+  static RC              get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value, bool &update_internal_error);
   Table                 *table_ = nullptr;
   std::vector<Value>     values_;
   FilterStmt            *filter_stmt_ = nullptr;
   std::vector<FieldMeta> fields_;
-  bool subq_multi_results_flag_ = false;
+  bool update_internal_error_ = false;
 };
