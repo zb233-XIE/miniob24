@@ -100,6 +100,12 @@ RC IntegerType::cast_to(const Value &val, AttrType type, Value &result) const
       result     = Value((float)data);
       break;
     }
+    case AttrType::CHARS: {
+      stringstream ss;
+      ss << val.get_int();
+      result.set_string(ss.str().c_str(), strlen(ss.str().c_str()));
+      break;
+    }
     default: return RC::UNIMPLEMENTED;
   }
   return RC::SUCCESS;

@@ -179,9 +179,14 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
 
     // check whether the type of field and value is the same
     if (values[i].attr_type() != update_fields[i].type() && !values[i].get_null()) {
-      LOG_WARN("value used to update record type %d does not match field `%s` type %d",
-        values[i].attr_type(), update_fields[i].name(), update_fields[i].type());
-      update_internal_error = true;
+      Value casted_value;
+      RC rc = Value::cast_to(values[i], update_fields[i].type(), casted_value);
+      if (rc == RC::SUCCESS) {
+        values[i] = casted_value;
+      } else {
+        LOG_WARN("failed to cast value to field type. rc=%d:%s", rc, strrc(rc));
+        update_internal_error = true;
+      }
     }
 
     // check if the field is not null and value is null
