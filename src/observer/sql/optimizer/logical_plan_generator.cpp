@@ -27,6 +27,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/project_logical_operator.h"
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/group_by_logical_operator.h"
+#include "sql/operator/subquery_logical_operator.h"
 
 #include "sql/parser/parse_defs.h"
 #include "sql/operator/update_logical_operator.h"
@@ -36,6 +37,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "sql/stmt/insert_stmt.h"
 #include "sql/stmt/select_stmt.h"
+#include "sql/stmt/subquery_stmt.h"
 #include "sql/stmt/stmt.h"
 
 #include "sql/expr/expression_iterator.h"
@@ -178,6 +180,22 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }
 
     last_oper = &having_predicate_oper;
+  }
+
+  // 插入SubqueryLogiclOperator
+  unique_ptr<LogicalOperator> subquery_oper;
+  rc = create_plan(select_stmt->subquery_stmt(), subquery_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create subquery logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if (subquery_oper) {
+    if (*last_oper) {
+      subquery_oper->add_child(std::move(*last_oper));
+    }
+
+    last_oper = &subquery_oper;
   }
 
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
@@ -445,5 +463,20 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
   auto group_by_oper = make_unique<GroupByLogicalOperator>(std::move(group_by_expressions),
                                                            std::move(aggregate_expressions));
   logical_operator = std::move(group_by_oper);
+  return RC::SUCCESS;
+}
+
+RC LogicalPlanGenerator::create_plan(SubqueryStmt *stmt, unique_ptr<LogicalOperator> &logical_operator)
+{
+  if (stmt == nullptr) {
+    return RC::SUCCESS;
+  }
+  unique_ptr<LogicalOperator> sub_logical_operator;
+  create(stmt->sub_stmt(), sub_logical_operator);
+
+  auto subquery_oper = make_unique<SubqueryLogicalOperator>(std::unique_ptr<Expression>(stmt->expr()), stmt->comp(), stmt->left_is_expr()); 
+  subquery_oper->add_child(std::move(sub_logical_operator));
+
+  logical_operator = std::move(subquery_oper);
   return RC::SUCCESS;
 }

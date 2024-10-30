@@ -114,12 +114,15 @@ extern int yydebug;
     L2_DISTANCE = 320,
     COSINE_DISTANCE = 321,
     INNER_PRODUCT = 322,
-    NUMBER = 323,
-    FLOAT = 324,
-    ID = 325,
-    SSS = 326,
-    DATE = 327,
-    UMINUS = 328
+    EXISTS_T = 323,
+    NOT = 324,
+    IN_T = 325,
+    NUMBER = 326,
+    FLOAT = 327,
+    ID = 328,
+    SSS = 329,
+    DATE = 330,
+    UMINUS = 331
   };
 #endif
 
@@ -127,7 +130,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 151 "yacc_sql.y"
+#line 155 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -153,7 +156,7 @@ union YYSTYPE
   float                                      floats;
   char *                                     date;
 
-#line 157 "yacc_sql.hpp"
+#line 160 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

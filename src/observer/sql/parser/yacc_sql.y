@@ -146,6 +146,10 @@ bool is_valid_date(const char *date) {
         L2_DISTANCE
         COSINE_DISTANCE
         INNER_PRODUCT
+        EXISTS_T
+        NOT
+        IN_T
+
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -187,6 +191,7 @@ bool is_valid_date(const char *date) {
 %type <value>               value
 %type <number>              number
 %type <string>              relation
+/* %type <condition>           subquery */
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <expression>          agg_fun_attr
@@ -829,7 +834,57 @@ where:
     | WHERE condition_list {
       $$ = $2;  
     }
+    /* | WHERE subquery {
+      $$ = new std::vector<ConditionSqlNode>;
+      $$->emplace_back(*$2);
+      delete $2;
+    } */
     ;
+
+/* subquery:
+    expression IN_T LBRACE select_stmt RBRACE
+    {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = CompOp::IN;
+      $$->expr = $1;
+      $$->sub_sqlnode = $4;
+    }
+    | expression NOT IN_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = CompOp::NOT_IN;
+      $$->expr = $1;
+      $$->sub_sqlnode = $5;
+    }
+    | EXISTS_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = CompOp::EXISTS;
+      $$->sub_sqlnode = $3;
+    }
+    | NOT EXISTS_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = CompOp::NOT_EXISTS;
+      $$->sub_sqlnode = $4;
+    }
+    | expression comp_op LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = $2;
+      $$->expr = $1;
+      $$->sub_sqlnode = $4;
+    }
+    | LBRACE select_stmt RBRACE comp_op expression {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = $4;
+      $$->expr = $5;
+      $$->sub_sqlnode = $2;
+    }
+    ; */
+
 condition_list:
     /* empty */
     {
@@ -903,6 +958,48 @@ condition:
       $$->left_expr = $1;
       $$->right_expr = $3;
       $$->comp = $2;
+    }
+    | expression IN_T LBRACE select_stmt RBRACE
+    {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = CompOp::IN;
+      $$->expr = $1;
+      $$->sub_sqlnode = $4;
+    }
+    | expression NOT IN_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = CompOp::NOT_IN;
+      $$->expr = $1;
+      $$->sub_sqlnode = $5;
+    }
+    | EXISTS_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = CompOp::EXISTS;
+      $$->sub_sqlnode = $3;
+    }
+    | NOT EXISTS_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = CompOp::NOT_EXISTS;
+      $$->sub_sqlnode = $4;
+    }
+    | expression comp_op LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = $2;
+      $$->expr = $1;
+      $$->sub_sqlnode = $4;
+    }
+    | LBRACE select_stmt RBRACE comp_op expression {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = $4;
+      $$->expr = $5;
+      $$->sub_sqlnode = $2;
+      $$->left_is_expr = 0;
     }
     ;
 

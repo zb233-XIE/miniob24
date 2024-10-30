@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by Wangyunlai on 2022/12/14.
 //
 
+#include <memory>
 #include <utility>
 
 #include "common/log/log.h"
@@ -30,6 +31,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/insert_physical_operator.h"
 #include "sql/operator/join_logical_operator.h"
 #include "sql/operator/join_physical_operator.h"
+#include "sql/operator/physical_operator.h"
 #include "sql/operator/predicate_logical_operator.h"
 #include "sql/operator/predicate_physical_operator.h"
 #include "sql/operator/project_logical_operator.h"
@@ -44,6 +46,11 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/table_scan_vec_physical_operator.h"
 #include "sql/operator/update_physical_operator.h"
 #include "sql/optimizer/physical_plan_generator.h"
+#include "sql/operator/subquery_logical_operator.h"
+#include "sql/operator/subquery_physical_operator.h"
+#include "sql/operator/dumb_logical_operator.h"
+#include "sql/operator/dumb_physical_operator.h"
+#include "sql/parser/parse_defs.h"
 
 using namespace std;
 
@@ -91,6 +98,14 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
     case LogicalOperatorType::GROUP_BY: {
       return create_plan(static_cast<GroupByLogicalOperator &>(logical_operator), oper);
     } break;
+
+    case LogicalOperatorType::SUBQUERY: {
+      return create_plan(static_cast<SubqueryLogicalOperator &>(logical_operator), oper);
+    }
+
+    case LogicalOperatorType::DUMB: {
+      return create_plan(static_cast<DumbLogicalOperator &>(logical_operator), oper);
+    }
 
     default: {
       ASSERT(false, "unknown logical operator type");
@@ -393,6 +408,46 @@ RC PhysicalPlanGenerator::create_plan(GroupByLogicalOperator &logical_oper, std:
   group_by_oper->add_child(std::move(child_physical_oper));
 
   oper = std::move(group_by_oper);
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(SubqueryLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
+{
+  RC rc = RC::SUCCESS;
+  vector<unique_ptr<LogicalOperator>> &child_opers = logical_oper.children();
+  if (child_opers.size() != 2) {
+    LOG_WARN("subquery operator should have 2 children, but have %d", child_opers.size());
+    return RC::INTERNAL;
+  }
+
+  unique_ptr<Expression> &expr = logical_oper.expr();
+  CompOp comp = logical_oper.comp();
+  int left_is_expr = logical_oper.left_is_expr();
+  auto subquery_operator = make_unique<SubqueryPhysicalOperator>(std::move(expr), comp, left_is_expr);
+  for (auto &child_oper : child_opers) {
+    unique_ptr<PhysicalOperator> child_physical_oper;
+    rc = create(*child_oper, child_physical_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    subquery_operator->add_child(std::move(child_physical_oper));
+  }
+
+  oper = std::move(subquery_operator);
+
+  LOG_TRACE("create a subquery physical operator");
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(DumbLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
+{
+  RC rc = RC::SUCCESS;
+  ASSERT(logical_oper.children().size() == 0, "dumb operator should have no children");
+  auto dumb_operator = make_unique<DumbPhysicalOperator>();
+  oper = std::move(dumb_operator);
+  LOG_TRACE("create a dumb physical operator");
   return rc;
 }
 

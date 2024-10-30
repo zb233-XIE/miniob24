@@ -96,6 +96,9 @@ QUOTE            [\'\"]
 
 ";"                                     last_flag=0;RETURN_TOKEN(SEMICOLON);
 {DOT}                                   RETURN_TOKEN(DOT);
+EXISTS                                  RETURN_TOKEN(EXISTS_T);
+NOT                                     RETURN_TOKEN(NOT);
+IN                                      RETURN_TOKEN(IN_T);
 EXIT                                    RETURN_TOKEN(EXIT);
 HELP                                    RETURN_TOKEN(HELP);
 DESC                                    RETURN_TOKEN(DESC);

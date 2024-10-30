@@ -17,6 +17,9 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/rc.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/subquery_stmt.h"
+#include "sql/parser/parse_defs.h"
+#include "sql/stmt/stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include "sql/parser/expression_binder.h"
@@ -39,6 +42,10 @@ SelectStmt::~SelectStmt()
     delete having_filter_stmt_;
     having_filter_stmt_ = nullptr;
   }
+  if (nullptr != subquery_stmt_) {
+    delete subquery_stmt_;
+    subquery_stmt_ = nullptr;
+  }
 }
 
 RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
@@ -49,6 +56,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   }
 
   BinderContext binder_context;
+
+  SubqueryStmt *subquery_stmt = nullptr;
 
   // collect tables in `from` statement
   vector<Table *>                tables;
@@ -102,6 +111,26 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     }
   }
 
+  // debug
+  // for (ConditionSqlNode &condition : select_sql.conditions) {
+  //   std::cout << condition.is_subquery << std::endl;
+  //   SelectSqlNode &sub_select_sql = condition.sub_sqlnode->selection;
+  //   for (ConditionSqlNode &sub_select_condition : sub_select_sql.conditions) {
+  //     std::cout << sub_select_condition.is_subquery << std::endl;
+  //     if (sub_select_condition.is_subquery) {
+  //       SelectSqlNode &sub_sub_select_sql = sub_select_condition.sub_sqlnode->selection;
+  //       for (ConditionSqlNode &sub_sub_select_condition : sub_sub_select_sql.conditions) {
+  //         std::cout << sub_sub_select_condition.is_subquery << std::endl;
+  //         std::cout << (int)sub_sub_select_condition.left_expr->type() << std::endl;
+  //         std::cout << (int)sub_sub_select_condition.right_expr->type() << std::endl;
+  //       }
+  //     } else {
+  //       std::cout << (int)sub_select_condition.left_expr->type() << std::endl;
+  //       std::cout << (int)sub_select_condition.right_expr->type() << std::endl;
+  //     }
+  //   }
+  // }
+
   // 6. 绑定select_sql.conditions中的表达式
   for (ConditionSqlNode &condition : select_sql.conditions) {
     RC rc = RC::SUCCESS;
@@ -122,8 +151,51 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       }
       condition.left_expr = left_bound_expressions[0].release();
       condition.right_expr = right_bound_expressions[0].release();
+    } else if (condition.is_subquery) { // 对于子查询，这个循环的作用是生成subquery stmt
+      // 对于子查询，生成一个subquery
+      ParsedSqlNode *sub_sql_node = condition.sub_sqlnode;
+      Stmt *sub_stmt = nullptr;
+      Expression *bound_sub_expr = nullptr;
+      CompOp comp = condition.comp;
+
+      // 创造子select stmt
+      Stmt::create_stmt(db, *sub_sql_node, sub_stmt);
+      // 绑定表达式
+      if (condition.expr) { // exists不需要表达式
+        vector<unique_ptr<Expression>> bound_expressions;
+        std::unique_ptr<Expression> expr = std::unique_ptr<Expression>(condition.expr);
+        expression_binder.bind_expression(expr, bound_expressions); // 此处内存泄漏，因为现在尚未对该字段处理
+        if (OB_FAIL(rc)) {
+          LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+          return rc;
+        }
+        bound_sub_expr = bound_expressions[0].release();
+      }
+
+      subquery_stmt = new SubqueryStmt(bound_sub_expr, sub_stmt, comp, condition.left_is_expr);
+      delete sub_sql_node; // sub_sql_node到这里已经没用了，删除之
+      rc = subquery_stmt->self_check();
+      if (OB_FAIL(rc)) {
+        LOG_INFO("subquery stmt check failed");
+        return rc;
+      }
     }
   }
+
+  // 10. 在conditions中删除子查询的内容，因为后面要根据conditions构建filter stmt
+  for (auto it = select_sql.conditions.begin(); it != select_sql.conditions.end(); ) {
+    if (it->is_subquery) {
+      it = select_sql.conditions.erase(it);
+    } else {
+      it++;
+    }
+  }
+
+  // debug
+  // std::cout << "after delete" << std::endl;
+  // for (ConditionSqlNode &condition : select_sql.conditions) {
+  //   std::cout << condition.is_subquery << std::endl;
+  // }
 
   // 9. 绑定select_sql.join_conditions中的表达式
   for (std::vector<ConditionSqlNode> *conditions : select_sql.join_conditions) {
@@ -246,6 +318,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->group_by_.swap(group_by_expressions);
   select_stmt->join_filter_stmts_.swap(filter_stmts);
   select_stmt->having_filter_stmt_ = having_filter_stmt;
+  select_stmt->subquery_stmt_ = subquery_stmt;
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }

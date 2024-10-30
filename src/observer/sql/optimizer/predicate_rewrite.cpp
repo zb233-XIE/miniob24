@@ -14,6 +14,8 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/optimizer/predicate_rewrite.h"
 #include "sql/operator/logical_operator.h"
+#include "sql/operator/dumb_logical_operator.h"
+#include <utility>
 
 RC PredicateRewriteRule::rewrite(std::unique_ptr<LogicalOperator> &oper, bool &change_made)
 {
@@ -49,8 +51,11 @@ RC PredicateRewriteRule::rewrite(std::unique_ptr<LogicalOperator> &oper, bool &c
     for (auto &grand_child_oper : grand_child_opers) {
       oper->add_child(std::move(grand_child_oper));
     }
-  } else {
+  }
+  else {
     child_opers.clear();
+    std::unique_ptr<LogicalOperator> dumb_oper(new DumbLogicalOperator());
+    oper->add_child(std::move(dumb_oper));
   }
 
   change_made = true;
