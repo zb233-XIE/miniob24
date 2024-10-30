@@ -166,8 +166,23 @@ RC ComparisonExpr::compare_value(const Value &left, const Value &right, bool &re
     return rc;
   }
 
+  if (comp_ == CompOp::IS || comp_ == CompOp::IS_NOT) {
+    // check if one of the values is null
+    if (!left.get_null() && !right.get_null()) {
+      LOG_ERROR("IS/IS_NOT operator only supports null value");
+      return RC::INVALID_ARGUMENT;
+    }
+
+    result = left.get_null() && right.get_null();
+    if (comp_ == CompOp::IS_NOT) {
+      result = !result;
+    }
+    return rc;
+  }
+
   result         = false;
   if (left.get_null() || right.get_null()) return rc;
+  
   int cmp_result = left.compare(right);
   switch (comp_) {
     case EQUAL_TO: {

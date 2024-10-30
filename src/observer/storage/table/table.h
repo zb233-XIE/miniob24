@@ -19,6 +19,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/span.h"
 #include "common/lang/functional.h"
 
+#define NULL_MAGIC_NUMBER 114514810
+
 struct RID;
 class Record;
 class DiskBufferPool;

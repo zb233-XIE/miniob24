@@ -1,4 +1,5 @@
 #include "sql/operator/update_physical_operator.h"
+#include "event/sql_debug.h"
 #include "storage/trx/trx.h"
 
 RC UpdatePhysicalOperator::open(Trx *trx) {
@@ -20,6 +21,7 @@ RC UpdatePhysicalOperator::open(Trx *trx) {
       LOG_WARN("failed to get current record: %s", strrc(rc));
       return rc;
     }
+    sql_debug("update got a tuple: %s", tuple->to_string().c_str());
 
     RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
     Record   &record    = row_tuple->record();
@@ -28,11 +30,20 @@ RC UpdatePhysicalOperator::open(Trx *trx) {
 
   child->close();
 
+  if (!records_.empty() && update_internal_error_) {
+    return RC::INVALID_ARGUMENT;
+  }
+
   for (Record &record: records_) {
     char *updated_data = new char[record.len()];
     memcpy(updated_data, record.data(), record.len());
 
     for (size_t i = 0; i < fields_.size(); i++) {
+      if (values_[i].get_null()) {
+        *(int32_t *)(updated_data + fields_[i].offset()) = NULL_MAGIC_NUMBER;
+        continue;
+      }
+      
       const FieldMeta &field = fields_[i];
       if (field.type() == AttrType::CHARS) {
         memset(updated_data + field.offset(), 0, field.len());

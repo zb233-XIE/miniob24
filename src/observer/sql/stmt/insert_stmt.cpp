@@ -47,6 +47,15 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     return RC::SCHEMA_FIELD_MISSING;
   }
 
+  // ensure that non-nullable fields do not receive null values
+  for (int i = 0; i < field_num; i++) {
+    const FieldMeta *field = table_meta.field(i + table_meta.sys_field_num());
+    if (field->nullable() == false && values[i].get_null() == 1) {
+      LOG_WARN("non-nullable field receives null value. field name=%s", field->name());
+      return RC::FIELD_NOT_NULL_VIOLATION;
+    }
+  }
+
   // everything alright
   stmt = new InsertStmt(table, values, value_num);
   return RC::SUCCESS;

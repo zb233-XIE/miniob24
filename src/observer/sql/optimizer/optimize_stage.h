@@ -49,6 +49,7 @@ private:
    */
   RC create_logical_plan(SQLStageEvent *sql_event, std::unique_ptr<LogicalOperator> &logical_operator);
 
+public:
   /**
    * @brief 重写逻辑计划
    * @details 根据各种规则，对逻辑计划进行重写，比如消除多余的比较(1!=0)等。
@@ -57,6 +58,7 @@ private:
    */
   RC rewrite(std::unique_ptr<LogicalOperator> &logical_operator);
 
+private:
   /**
    * @brief 优化逻辑计划
    * @details 当前什么都没做。可以增加每个逻辑计划的代价模型，然后根据代价模型进行优化。
