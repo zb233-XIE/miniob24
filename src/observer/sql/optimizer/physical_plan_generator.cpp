@@ -415,7 +415,8 @@ RC PhysicalPlanGenerator::create_plan(SubqueryLogicalOperator &logical_oper, std
 {
   RC rc = RC::SUCCESS;
   vector<unique_ptr<LogicalOperator>> &child_opers = logical_oper.children();
-  if (child_opers.size() != 2) {
+  std::vector<Value> values = logical_oper.get_values();
+  if (child_opers.size() != 2 && values.empty()) {
     LOG_WARN("subquery operator should have 2 children, but have %d", child_opers.size());
     return RC::INTERNAL;
   }
@@ -434,6 +435,8 @@ RC PhysicalPlanGenerator::create_plan(SubqueryLogicalOperator &logical_oper, std
 
     subquery_operator->add_child(std::move(child_physical_oper));
   }
+
+  subquery_operator->set_values(values);
 
   oper = std::move(subquery_operator);
 

@@ -6,6 +6,9 @@
 
 RC SubqueryStmt::self_check()
 {
+  if (sub_stmt_ == nullptr) {
+    return RC::SUCCESS;
+  }
   SelectStmt *select_stmt = static_cast<SelectStmt *>(sub_stmt_);
   if (comp_ == CompOp::IN || comp_ == CompOp::NOT_IN) {
     if (select_stmt->query_expressions().size() != 1) {

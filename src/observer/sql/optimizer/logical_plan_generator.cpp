@@ -471,11 +471,16 @@ RC LogicalPlanGenerator::create_plan(SubqueryStmt *stmt, unique_ptr<LogicalOpera
   if (stmt == nullptr) {
     return RC::SUCCESS;
   }
-  unique_ptr<LogicalOperator> sub_logical_operator;
-  create(stmt->sub_stmt(), sub_logical_operator);
 
   auto subquery_oper = make_unique<SubqueryLogicalOperator>(std::unique_ptr<Expression>(stmt->expr()), stmt->comp(), stmt->left_is_expr()); 
-  subquery_oper->add_child(std::move(sub_logical_operator));
+  
+  if (stmt->sub_stmt() != nullptr) {
+    unique_ptr<LogicalOperator> sub_logical_operator;
+    create(stmt->sub_stmt(), sub_logical_operator);
+    subquery_oper->add_child(std::move(sub_logical_operator));
+  } else {
+    subquery_oper->set_values(stmt->values());
+  }
 
   logical_operator = std::move(subquery_oper);
   return RC::SUCCESS;

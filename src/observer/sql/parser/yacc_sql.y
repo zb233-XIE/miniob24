@@ -974,6 +974,34 @@ condition:
       $$->expr = $1;
       $$->sub_sqlnode = $5;
     }
+    | expression IN_T LBRACE value value_list RBRACE
+    {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = CompOp::IN;
+      $$->expr = $1;
+      if ($5 != nullptr) {
+        $$->values.swap(*$5);
+        delete $5;
+      }
+      $$->values.emplace_back(*$4);
+      delete $4;
+      $$->sub_sqlnode = nullptr;
+    }
+    | expression NOT IN_T LBRACE value value_list RBRACE
+    {
+      $$ = new ConditionSqlNode;
+      $$->is_subquery = 1;
+      $$->comp = CompOp::NOT_IN;
+      $$->expr = $1;
+      if ($6 != nullptr) {
+        $$->values.swap(*$6);
+        delete $6;
+      }
+      $$->values.emplace_back(*$5);
+      delete $5;
+      $$->sub_sqlnode = nullptr;
+    }
     | EXISTS_T LBRACE select_stmt RBRACE {
       $$ = new ConditionSqlNode;
       $$->is_subquery = 1;

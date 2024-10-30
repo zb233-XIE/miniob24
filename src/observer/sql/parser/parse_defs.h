@@ -92,6 +92,7 @@ struct ConditionSqlNode
   int is_subquery = 0;
   Expression *expr;
   ParsedSqlNode *sub_sqlnode;
+  std::vector<Value> values; // where in (1, 2, 3)
   int left_is_expr = 1;
 };
 

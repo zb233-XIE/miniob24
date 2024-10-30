@@ -14,18 +14,21 @@ SubqueryPhysicalOperator::SubqueryPhysicalOperator(std::unique_ptr<Expression> e
 
 RC SubqueryPhysicalOperator::open(Trx *trx)
 {
-  if (children_.size() != 2) {
+  if (children_.size() != 2 && values_.empty()) {
     LOG_WARN("subquery operator should have 2 children");
     return RC::INTERNAL;
   }
 
   RC rc = RC::SUCCESS;
-  // 主查询是第0个，子查询是第1个
-  main_oper_ = children_[1].get();
-  sub_oper_ = children_[0].get();
-  sub_closed_ = true;
-  round_done_ = true;
 
+  if (children_.size() > 1) {
+    // 主查询是第0个，子查询是第1个
+    main_oper_ = children_[1].get();
+    sub_oper_  = children_[0].get();
+  } else {
+    // 这种情况下只有主查询
+    main_oper_ = children_[0].get();
+  }
   rc = main_oper_->open(trx);
   trx_ = trx;
   return rc;
@@ -44,6 +47,28 @@ RC SubqueryPhysicalOperator::next()
     bool exists = false;
     bool not_exists = true;
 
+    Value expr_value, subquery_value;
+    int   comp_res;
+
+    if (children_.size() == 1) {
+      expression_->get_value(*main_tuple_, expr_value);
+      for (auto &v : values_) {
+        if (left_is_expr_) {
+          comp_res = expr_value.compare(v);
+        } else {
+          comp_res = v.compare(expr_value);
+        }
+        if (comp_res == 0) {
+          in     = true;
+          not_in = false;
+        }
+      }
+      if ((comp_ == CompOp::IN && in) || (comp_ == CompOp::NOT_IN && not_in)) {
+        return rc;
+      }
+      continue;
+    }
+
     // 子查询
     RC rc_sub = RC::SUCCESS;
     rc_sub = sub_oper_->open(trx_);
@@ -55,8 +80,6 @@ RC SubqueryPhysicalOperator::next()
       exists = true;
       not_exists = false;
 
-      Value expr_value, subquery_value;
-      int   comp_res;
       expression_->get_value(*main_tuple_, expr_value);
       sub_tuple_->cell_at(0, subquery_value);
       if (left_is_expr_) {

@@ -153,18 +153,14 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       condition.right_expr = right_bound_expressions[0].release();
     } else if (condition.is_subquery) { // 对于子查询，这个循环的作用是生成subquery stmt
       // 对于子查询，生成一个subquery
-      ParsedSqlNode *sub_sql_node = condition.sub_sqlnode;
-      Stmt *sub_stmt = nullptr;
-      Expression *bound_sub_expr = nullptr;
-      CompOp comp = condition.comp;
 
-      // 创造子select stmt
-      Stmt::create_stmt(db, *sub_sql_node, sub_stmt);
+      Expression *   bound_sub_expr = nullptr;
+      CompOp         comp           = condition.comp;
       // 绑定表达式
-      if (condition.expr) { // exists不需要表达式
+      if (condition.expr) {  // exists不需要表达式
         vector<unique_ptr<Expression>> bound_expressions;
-        std::unique_ptr<Expression> expr = std::unique_ptr<Expression>(condition.expr);
-        expression_binder.bind_expression(expr, bound_expressions); // 此处内存泄漏，因为现在尚未对该字段处理
+        std::unique_ptr<Expression>    expr = std::unique_ptr<Expression>(condition.expr);
+        expression_binder.bind_expression(expr, bound_expressions);  // 此处内存泄漏，因为现在尚未对该字段处理
         if (OB_FAIL(rc)) {
           LOG_INFO("bind expression failed. rc=%s", strrc(rc));
           return rc;
@@ -172,8 +168,18 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
         bound_sub_expr = bound_expressions[0].release();
       }
 
-      subquery_stmt = new SubqueryStmt(bound_sub_expr, sub_stmt, comp, condition.left_is_expr);
-      delete sub_sql_node; // sub_sql_node到这里已经没用了，删除之
+      if (condition.sub_sqlnode != nullptr) {
+        ParsedSqlNode *sub_sql_node   = condition.sub_sqlnode;
+        Stmt *         sub_stmt       = nullptr;
+
+        // 创造子select stmt
+        Stmt::create_stmt(db, *sub_sql_node, sub_stmt);
+
+        subquery_stmt = new SubqueryStmt(bound_sub_expr, sub_stmt, comp, condition.left_is_expr);
+        delete sub_sql_node;  // sub_sql_node到这里已经没用了，删除之
+      } else {
+        subquery_stmt = new SubqueryStmt(bound_sub_expr, condition.values, comp, condition.left_is_expr);
+      }
       rc = subquery_stmt->self_check();
       if (OB_FAIL(rc)) {
         LOG_INFO("subquery stmt check failed");

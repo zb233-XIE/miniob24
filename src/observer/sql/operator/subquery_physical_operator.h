@@ -18,6 +18,8 @@ public:
 
   Tuple *current_tuple() override;
 
+  void set_values(std::vector<Value> &values) { values_.swap(values); }
+
   // RC tuple_schema(TupleSchema &schema) const override;
 
 private:
@@ -32,6 +34,7 @@ private:
   Tuple *                     sub_tuple_  = nullptr;
   std::unique_ptr<Expression> expression_;
   CompOp                      comp_;
+  std::vector<Value>          values_;
   int                         left_is_expr_;
   bool                        round_done_ = true;  // 子查询查完一遍
   bool                        sub_closed_ = true;  // 子查询是否已经关闭
