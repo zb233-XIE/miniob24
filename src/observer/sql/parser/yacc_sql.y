@@ -787,6 +787,15 @@ agg_fun_attr:
       delete node;
       free($1);
     }
+    | ID DOT ID {
+      RelAttrSqlNode *node = new RelAttrSqlNode;
+      node->relation_name  = $1;
+      node->attribute_name = $3;
+      $$ = new UnboundFieldExpr(node->relation_name, node->attribute_name);
+      $$->set_name(token_name(sql_string, &@$));
+      delete node;
+      free($1);
+    }
     ;
 
 rel_attr:

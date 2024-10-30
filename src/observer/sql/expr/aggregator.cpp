@@ -111,9 +111,6 @@ RC AvgAggregator::accumulate(const Value &value)
       return RC::SCHEMA_FIELD_TYPE_MISMATCH;
     } else {
       value_ = Value((float)0.0f);
-      Value::add(value, value_, value_);
-      count_++;
-      return RC::SUCCESS;
     }
   }
   if (!value.get_null()) {
