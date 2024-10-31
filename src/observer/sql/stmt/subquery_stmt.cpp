@@ -21,10 +21,10 @@ RC SubqueryUnit::check()
       return RC::INTERNAL;
     }
 
-    Expression *expr = select_stmt->query_expressions().front().get();
-    if (expr->type() != ExprType::AGGREGATION) {
-      return RC::INTERNAL;
-    }
+    // Expression *expr = select_stmt->query_expressions().front().get();
+    // if (expr->type() != ExprType::AGGREGATION) {
+    //   return RC::INTERNAL;
+    // }
   }
   return RC::SUCCESS;
 }
