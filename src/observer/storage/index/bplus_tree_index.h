@@ -47,7 +47,7 @@ private:
   Table           *table_  = nullptr;
   BplusTreeHandler index_handler_;
 
-  const char *make_key(const char *record);
+  const char *make_key(const char *record, bool &has_null);
 };
 
 /**
