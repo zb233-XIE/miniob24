@@ -57,6 +57,8 @@ enum CompOp
   NOT_EXISTS,
   IN,
   NOT_IN,
+  IS,           ///< "IS"
+  IS_NOT,       ///< "IS NOT"
   NO_OP
 };
 
@@ -149,10 +151,14 @@ struct DeleteSqlNode
   std::vector<ConditionSqlNode> conditions;
 };
 
+class ParsedSqlNode;
+
 struct SetClauseSqlNode
 {
+  bool has_subquery;
   std::string attribute_name; 
   Value       value;
+  ParsedSqlNode *subquery;
 };
 
 /**
@@ -177,6 +183,7 @@ struct AttrInfoSqlNode
   AttrType    type;    ///< Type of attribute
   std::string name;    ///< Attribute name
   size_t      length;  ///< Length of attribute
+  bool nullable;       ///< 是否可以为空
 };
 
 /**

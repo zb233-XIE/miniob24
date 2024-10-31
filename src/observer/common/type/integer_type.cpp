@@ -73,6 +73,11 @@ RC IntegerType::set_value_from_str(Value &val, const string &data) const
 
 RC IntegerType::to_string(const Value &val, string &result) const
 {
+  if (val.get_null()) {
+    result = "NULL";
+    return RC::SUCCESS;
+  }
+
   stringstream ss;
   ss << val.value_.int_value_;
   result = ss.str();
@@ -93,6 +98,12 @@ RC IntegerType::cast_to(const Value &val, AttrType type, Value &result) const
     case AttrType::FLOATS: {
       float data = (float)val.get_int();
       result     = Value((float)data);
+      break;
+    }
+    case AttrType::CHARS: {
+      stringstream ss;
+      ss << val.get_int();
+      result.set_string(ss.str().c_str(), strlen(ss.str().c_str()));
       break;
     }
     default: return RC::UNIMPLEMENTED;

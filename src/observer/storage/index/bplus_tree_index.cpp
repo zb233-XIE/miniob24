@@ -95,9 +95,10 @@ RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
   int key_len = index_handler_.file_header().total_attr_length;
 
   if (index_meta_.unique()) {
+    bool null_key = (*(int32_t *)key == NULL_MAGIC_NUMBER);
     std::list<RID> rids;
     index_handler_.get_entry(key, key_len, rids);
-    if (rids.size() > 0) {
+    if (rids.size() > 0 && !null_key) {
       LOG_WARN("Failed to insert entry due to the key is already existed. key:%s", key);
       delete [] key;
       return RC::RECORD_DUPLICATE_KEY;
