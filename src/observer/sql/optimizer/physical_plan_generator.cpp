@@ -31,6 +31,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/insert_physical_operator.h"
 #include "sql/operator/join_logical_operator.h"
 #include "sql/operator/join_physical_operator.h"
+#include "sql/operator/logical_operator.h"
 #include "sql/operator/physical_operator.h"
 #include "sql/operator/predicate_logical_operator.h"
 #include "sql/operator/predicate_physical_operator.h"
@@ -228,6 +229,40 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
   ASSERT(expressions.size() == 1, "predicate logical operator's children should be 1");
 
   unique_ptr<Expression> expression = std::move(expressions.front());
+  // 为子查询generate physical plan
+  if (expression->type() == ExprType::CONJUNCTION) {
+    auto conj_expr = static_cast<ConjunctionExpr *>(expression.get());
+    std::vector<std::unique_ptr<Expression>> &exprs = conj_expr->children();
+    for (auto &expr : exprs) {
+      if (expr->type() == ExprType::SUBQUERY) {
+        auto subquery_expr = static_cast<SubqueryExpr *>(expr.get());
+        unique_ptr<LogicalOperator> &logical_oper = subquery_expr->get_logical_operator();
+        unique_ptr<PhysicalOperator> physical_oper;
+        if (logical_oper) {
+          rc = create(*logical_oper, physical_oper);
+          if (rc != RC::SUCCESS) {
+            LOG_WARN("failed to create subquery operator of predicate operator. rc=%s", strrc(rc));
+            return rc;
+          }
+          subquery_expr->set_physical_operator(physical_oper);
+          subquery_expr->set_trx(this->trx_);
+        }
+      }
+    }
+  } else if (expression->type() == ExprType::SUBQUERY) { // 当conjunction里面的表达式只有1个时，这层壳会被优化掉，见conjunction_simplification_rule.cpp
+    auto                         subquery_expr = static_cast<SubqueryExpr *>(expression.get());
+    unique_ptr<LogicalOperator> &logical_oper  = subquery_expr->get_logical_operator();
+    unique_ptr<PhysicalOperator> physical_oper;
+    if (logical_oper) {
+      rc = create(*logical_oper, physical_oper);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create subquery operator of predicate operator. rc=%s", strrc(rc));
+        return rc;
+      }
+      subquery_expr->set_physical_operator(physical_oper);
+      subquery_expr->set_trx(this->trx_);
+    }
+  }
   oper = unique_ptr<PhysicalOperator>(new PredicatePhysicalOperator(std::move(expression)));
   oper->add_child(std::move(child_phy_oper));
   return rc;

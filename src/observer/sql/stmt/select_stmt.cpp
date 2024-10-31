@@ -152,10 +152,12 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       condition.left_expr = left_bound_expressions[0].release();
       condition.right_expr = right_bound_expressions[0].release();
     } else if (condition.is_subquery) { // 对于子查询，这个循环的作用是生成subquery stmt
-      // 对于子查询，生成一个subquery
+      if (subquery_stmt == nullptr) {
+        subquery_stmt = new SubqueryStmt();
+      }
 
       Expression *   bound_sub_expr = nullptr;
-      CompOp         comp           = condition.comp;
+      Stmt *         sub_stmt       = nullptr;
       // 绑定表达式
       if (condition.expr) {  // exists不需要表达式
         vector<unique_ptr<Expression>> bound_expressions;
@@ -168,21 +170,15 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
         bound_sub_expr = bound_expressions[0].release();
       }
 
-      if (condition.sub_sqlnode != nullptr) {
+      if (condition.sub_sqlnode != nullptr) { // 创造子select stmt
         ParsedSqlNode *sub_sql_node   = condition.sub_sqlnode;
-        Stmt *         sub_stmt       = nullptr;
-
-        // 创造子select stmt
         Stmt::create_stmt(db, *sub_sql_node, sub_stmt);
-
-        subquery_stmt = new SubqueryStmt(bound_sub_expr, sub_stmt, comp, condition.left_is_expr);
         delete sub_sql_node;  // sub_sql_node到这里已经没用了，删除之
-      } else {
-        subquery_stmt = new SubqueryStmt(bound_sub_expr, condition.values, comp, condition.left_is_expr);
       }
-      rc = subquery_stmt->self_check();
+
+      rc = subquery_stmt->add_unit(condition, bound_sub_expr, sub_stmt);
       if (OB_FAIL(rc)) {
-        LOG_INFO("subquery stmt check failed");
+        LOG_INFO("add subquery unit failed. rc=%s", strrc(rc));
         return rc;
       }
     }

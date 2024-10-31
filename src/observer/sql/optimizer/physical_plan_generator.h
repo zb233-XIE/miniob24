@@ -46,6 +46,8 @@ public:
   RC create(LogicalOperator &logical_operator, std::unique_ptr<PhysicalOperator> &oper);
   RC create_vec(LogicalOperator &logical_operator, std::unique_ptr<PhysicalOperator> &oper);
 
+  void set_trx(Trx *trx) { trx_ = trx; }
+
 private:
   RC create_plan(TableGetLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(PredicateLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
@@ -63,4 +65,6 @@ private:
   RC create_vec_plan(TableGetLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_vec_plan(GroupByLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_vec_plan(ExplainLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
+
+  Trx *trx_;
 };

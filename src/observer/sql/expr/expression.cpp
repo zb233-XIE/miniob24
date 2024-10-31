@@ -13,10 +13,14 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/expr/expression.h"
+#include "common/log/log.h"
+#include "common/rc.h"
 #include "common/type/attr_type.h"
 #include "common/value.h"
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
+#include "sql/parser/parse_defs.h"
+#include "sql/operator/physical_operator.h"
 
 using namespace std;
 
@@ -291,6 +295,111 @@ RC ComparisonExpr::compare_column(const Column &left, const Column &right, std::
   } else {
     compare_result<T, false, false>((T *)left.data(), (T *)right.data(), left.count(), result, comp_);
   }
+  return rc;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+SubqueryExpr::SubqueryExpr(int left_is_expr, CompOp comp, std::vector<Value> &values, Expression *expr,
+    unique_ptr<LogicalOperator> &logical_oper)
+{
+  comp_         = comp;
+  left_is_expr_ = left_is_expr;
+  logical_oper_ = std::move(logical_oper);
+  values_.swap(values);
+  expr_          = unique_ptr<Expression>(expr);
+  physical_oper_ = nullptr;
+}
+
+void SubqueryExpr::set_physical_operator(unique_ptr<PhysicalOperator> &phy_oper)
+{
+  physical_oper_ = std::move(phy_oper);
+}
+
+// 类似于comparison，先得出左右两边的值，再根据comp进行比较
+RC SubqueryExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  RC rc = RC::SUCCESS;
+  Value expr_value;
+  Value subquery_value;
+  int comp_res;
+  bool in = false;
+  bool not_in = true;
+  bool exists = false;
+  bool not_exists = true;
+  bool ok = false; // 用于比较运算的判断
+  bool pass = false;
+
+  if (expr_) { // 对于exists来说，expr_可能不存在
+    rc = expr_->get_value(tuple, expr_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of expression. rc=%s", strrc(rc));
+      return rc;
+    }
+  }
+
+  if (physical_oper_) {
+    rc = physical_oper_->open(trx_);
+    ASSERT(rc == RC::SUCCESS, "ji le"); // debug
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to open sub operator");
+      return rc;
+    }
+    while (OB_SUCC(rc = physical_oper_->next())) {
+      exists = true;
+      not_exists = false;
+
+      Tuple *sub_tuple = physical_oper_->current_tuple();
+      sub_tuple->cell_at(0, subquery_value);
+
+      if (left_is_expr_) {
+        comp_res = expr_value.compare(subquery_value);
+      } else {
+        comp_res = subquery_value.compare(expr_value);
+      }
+
+      if (comp_res == 0) {
+        in = true;
+        not_in = false;
+        ok = (comp_ == CompOp::EQUAL_TO || comp_ == CompOp::LESS_EQUAL || comp_ == CompOp::GREAT_EQUAL);
+      } else {
+        if (comp_res > 0) {
+          ok = (comp_ == CompOp::NOT_EQUAL || comp_ == CompOp::GREAT_EQUAL || comp_ == CompOp::GREAT_THAN);
+        } else {
+          ok = (comp_ == CompOp::NOT_EQUAL || comp_ == CompOp::LESS_EQUAL || comp_ == CompOp::LESS_THAN);
+        }
+      }
+    }
+    rc = physical_oper_->close();
+    ASSERT(rc == RC::SUCCESS, "ji le"); // debug
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to close subquery oper. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    if ((comp_ == CompOp::IN && in) || (comp_ == CompOp::NOT_IN && not_in) || (comp_ == CompOp::EXISTS && exists) ||
+        (comp_ == CompOp::NOT_EXISTS && not_exists) || ok) {
+      pass = true;
+    }
+
+  } else {
+    for (auto &v : values_) {
+      if (left_is_expr_) {
+        comp_res = expr_value.compare(v);
+      } else {
+        comp_res = v.compare(expr_value);
+      }
+      if (comp_res == 0) {
+        in     = true;
+        not_in = false;
+      }
+    }
+    if ((comp_ == CompOp::IN && in) || (comp_ == CompOp::NOT_IN && not_in)) {
+      pass = true;
+    }
+  }
+
+  value.set_boolean(pass);
+
   return rc;
 }
 

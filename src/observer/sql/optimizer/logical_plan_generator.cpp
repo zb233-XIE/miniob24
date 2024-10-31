@@ -183,19 +183,35 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   }
 
   // 插入SubqueryLogiclOperator
-  unique_ptr<LogicalOperator> subquery_oper;
-  rc = create_plan(select_stmt->subquery_stmt(), subquery_oper);
+  // unique_ptr<LogicalOperator> subquery_oper;
+  // rc = create_plan(select_stmt->subquery_stmt(), subquery_oper);
+  // if (OB_FAIL(rc)) {
+  //   LOG_WARN("failed to create subquery logical plan. rc=%s", strrc(rc));
+  //   return rc;
+  // }
+
+  // if (subquery_oper) {
+  //   if (*last_oper) {
+  //     subquery_oper->add_child(std::move(*last_oper));
+  //   }
+
+  //   last_oper = &subquery_oper;
+  // }
+  // 子查询的predicate_oper2
+  unique_ptr<LogicalOperator> predicate_oper2;
+
+  rc = create_plan(select_stmt->subquery_stmt(), predicate_oper2);
   if (OB_FAIL(rc)) {
-    LOG_WARN("failed to create subquery logical plan. rc=%s", strrc(rc));
+    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
     return rc;
   }
 
-  if (subquery_oper) {
+  if (predicate_oper2) {
     if (*last_oper) {
-      subquery_oper->add_child(std::move(*last_oper));
+      predicate_oper2->add_child(std::move(*last_oper));
     }
 
-    last_oper = &subquery_oper;
+    last_oper = &predicate_oper2;
   }
 
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
@@ -286,6 +302,42 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
   unique_ptr<PredicateLogicalOperator> predicate_oper;
   if (!cmp_exprs.empty()) {
     unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
+    predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+  }
+
+  logical_operator = std::move(predicate_oper);
+  return rc;
+}
+
+// 仿照参数为FilterStmt的create_plan，目的是构建出表达式为ConjunctionExpr的PredicateLogicalOperator
+// ConjunctionExpr中是多个SubqueryExpr
+RC LogicalPlanGenerator::create_plan(SubqueryStmt *subquery_stmt, unique_ptr<LogicalOperator> &logical_operator)
+{
+  RC rc = RC::SUCCESS;
+  if (subquery_stmt == nullptr) {
+    return rc;
+  }
+
+  const std::vector<SubqueryUnit *> &subquery_units = subquery_stmt->subquery_units();
+  std::vector<unique_ptr<Expression>> subquery_exprs;
+  for (SubqueryUnit *subquery_unit : subquery_units) {
+    // stmt->logical plan
+    Stmt *sub_stmt = subquery_unit->stmt();
+    int left_is_expr = subquery_unit->left_is_expr();
+    CompOp comp = subquery_unit->comp();
+    std::vector<Value> values = subquery_unit->values();
+    Expression *expr = subquery_unit->expr();
+    unique_ptr<LogicalOperator> sub_logical_operator;
+    if (sub_stmt != nullptr) {
+      create(sub_stmt, sub_logical_operator);
+    }
+    SubqueryExpr *subquery_expr = new SubqueryExpr(left_is_expr, comp, values, expr, sub_logical_operator);
+    subquery_exprs.emplace_back(subquery_expr);
+  }
+
+  unique_ptr<PredicateLogicalOperator> predicate_oper;
+  if (!subquery_exprs.empty()) {
+    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, subquery_exprs));
     predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
   }
 
@@ -466,22 +518,22 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
   return RC::SUCCESS;
 }
 
-RC LogicalPlanGenerator::create_plan(SubqueryStmt *stmt, unique_ptr<LogicalOperator> &logical_operator)
-{
-  if (stmt == nullptr) {
-    return RC::SUCCESS;
-  }
+// RC LogicalPlanGenerator::create_plan(SubqueryStmt *stmt, unique_ptr<LogicalOperator> &logical_operator)
+// {
+//   if (stmt == nullptr) {
+//     return RC::SUCCESS;
+//   }
 
-  auto subquery_oper = make_unique<SubqueryLogicalOperator>(std::unique_ptr<Expression>(stmt->expr()), stmt->comp(), stmt->left_is_expr()); 
+//   auto subquery_oper = make_unique<SubqueryLogicalOperator>(std::unique_ptr<Expression>(stmt->expr()), stmt->comp(), stmt->left_is_expr()); 
   
-  if (stmt->sub_stmt() != nullptr) {
-    unique_ptr<LogicalOperator> sub_logical_operator;
-    create(stmt->sub_stmt(), sub_logical_operator);
-    subquery_oper->add_child(std::move(sub_logical_operator));
-  } else {
-    subquery_oper->set_values(stmt->values());
-  }
+//   if (stmt->sub_stmt() != nullptr) {
+//     unique_ptr<LogicalOperator> sub_logical_operator;
+//     create(stmt->sub_stmt(), sub_logical_operator);
+//     subquery_oper->add_child(std::move(sub_logical_operator));
+//   } else {
+//     subquery_oper->set_values(stmt->values());
+//   }
 
-  logical_operator = std::move(subquery_oper);
-  return RC::SUCCESS;
-}
+//   logical_operator = std::move(subquery_oper);
+//   return RC::SUCCESS;
+// }
