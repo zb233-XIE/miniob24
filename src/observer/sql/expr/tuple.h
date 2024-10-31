@@ -58,6 +58,7 @@ public:
   int  cell_num() const { return static_cast<int>(cells_.size()); }
 
   const TupleCellSpec &cell_at(int i) const { return cells_[i]; }
+  const std::vector<TupleCellSpec> &cells() const { return cells_; }
 
 private:
   std::vector<TupleCellSpec> cells_;
