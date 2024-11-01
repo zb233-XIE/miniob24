@@ -614,7 +614,7 @@ RC LargeObjPageHandler::get_entry(vector<PageNum> &entries)
   ASSERT(lob_page_header_->is_first_page == 1, "");
 
   int index = 0;
-  while (lob_page_header_->index_entry[index] != BP_INVALID_PAGE_NUM) {
+  while (index < 10 && lob_page_header_->index_entry[index] != BP_INVALID_PAGE_NUM) {
     index++;
   }
   PageNum *st = lob_page_header_->index_entry;
@@ -832,7 +832,32 @@ RC RecordFileHandler::delete_record(const RID *rid)
     return rc;
   }
 
+  if (table_meta_->contain_lob_field()) {
+    Record record;
+    rc = record_page_handler->get_record(*rid, record);
+    if (OB_FAIL(rc)) {
+      return rc;
+    }
+
+    int         normal_field_start_index = table_meta_->sys_field_num();
+    int         normal_field_count       = table_meta_->field_num() - normal_field_start_index;
+    const char *data                     = record.data();
+    for (int i = 0; i < normal_field_count; i++) {
+      const auto *field = table_meta_->field(i + normal_field_start_index);
+      if (field->type() == AttrType::TEXTS) {
+        // check last 4 bytes
+        const char *lob_field_data = data + field->offset() + field->len() - sizeof(PageNum);
+        PageNum     overflow_page  = *reinterpret_cast<const PageNum *>(lob_field_data);
+        rc                         = delete_lob_field(overflow_page);
+        if (OB_FAIL(rc)) {
+          LOG_DEBUG("failed to delete lob field, first page: %d", overflow_page);
+          return rc;
+        }
+      }
+    }
+  }
   rc = record_page_handler->delete_record(rid);
+
   // 📢 这里注意要清理掉资源，否则会与insert_record中的加锁顺序冲突而可能出现死锁
   // delete record的加锁逻辑是拿到页面锁，删除指定记录，然后加上和释放record manager锁
   // insert record是加上 record manager锁，然后拿到指定页面锁再释放record manager锁
@@ -845,6 +870,37 @@ RC RecordFileHandler::delete_record(const RID *rid)
     LOG_TRACE("add free page %d to free page list", rid->page_num);
     lock_.unlock();
   }
+  return rc;
+}
+
+RC RecordFileHandler::delete_lob_field(PageNum first_page_num)
+{
+  if (first_page_num == BP_INVALID_PAGE_NUM) {
+    return RC::SUCCESS;
+  }
+
+  unique_ptr<LargeObjPageHandler> lob_page_handler(new LargeObjPageHandler());
+
+  RC rc = lob_page_handler->init(*disk_buffer_pool_, *log_handler_, first_page_num, ReadWriteMode::READ_WRITE);
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("Failed to init lob page handler.page number=%d. rc=%s", first_page_num, strrc(rc));
+    return rc;
+  }
+  vector<PageNum> entries;
+  lob_page_handler->get_entry(entries);
+  lob_page_handler->cleanup();
+
+  unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
+  for (auto page_num : entries) {
+    // reinitialize as pages to store normal records
+    RC rc = record_page_handler->init(
+        *disk_buffer_pool_, *log_handler_, page_num, ReadWriteMode::READ_WRITE);
+    if (OB_FAIL(rc)) {
+      LOG_ERROR("Failed to return lob page back to free pages set: page number=%d. rc=%s", first_page_num, strrc(rc));
+    }
+  }
+  record_page_handler->cleanup();
+
   return rc;
 }
 
@@ -863,6 +919,24 @@ RC RecordFileHandler::update_record(const char *data, const RID *rid)
   record_page_handler->cleanup();
   if (OB_FAIL(rc)) {
     LOG_ERROR("Failed to update record. page_number=%d, rc=%s", rid->page_num, strrc(rc));
+  }
+  return rc;
+}
+
+RC RecordFileHandler::update_record(const char *data, const Field_LOB_ANNO *record_lob_anno, const RID *rid)
+{
+  RC rc = RC::SUCCESS;
+
+  rc = delete_record(rid);
+  if(OB_FAIL(rc)){
+    LOG_DEBUG("Update record fail, delete failure");
+    return rc;
+  }
+
+  rc = insert_record(const_cast<char*>(data), table_meta_->record_size(), record_lob_anno, nullptr);
+  if(OB_FAIL(rc)){
+    LOG_DEBUG("Update record fail, insertion failure");
+    return rc;
   }
   return rc;
 }
@@ -1073,7 +1147,7 @@ RC RecordFileScanner::expand_lob_fields()
 
       int copy_len = field->len();
       memcpy(output_data + output_record_offset, data + current_offset, copy_len);
-      if(field->type() == AttrType::TEXTS){
+      if (field->type() == AttrType::TEXTS) {
         // check the last four bytes
         const char *lob_field_data = data + current_offset + field->len() - sizeof(PageNum);
         PageNum     overflow_page  = *reinterpret_cast<const PageNum *>(lob_field_data);
@@ -1092,7 +1166,7 @@ RC RecordFileScanner::expand_lob_fields()
           }
         }
         rc = expand_field(entries, output_data + output_record_offset, in_field_len, overflow_len);
-        
+
         if (OB_FAIL(rc)) {
           return rc;
         }
@@ -1121,7 +1195,7 @@ RC RecordFileScanner::expand_field(vector<PageNum> &entries, char *data, int off
     // ASSERT(offset + page_data_len <= copy_len, "");
     offset += page_data_len;
   }
-  *(char *)(data + offset + copy_len) = '\0'; // just an insurance
+  *(char *)(data + offset + copy_len) = '\0';  // just an insurance
   return rc;
 }
 

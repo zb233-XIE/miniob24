@@ -49,10 +49,11 @@ public:
   virtual RC insert_record(Table *table, Record &record, const Field_LOB_ANNO *record_lob_anno) override;
   RC         delete_record(Table *table, Record &record) override;
   RC         update_record(Table *table, Record &record, char *update_data) override;
-  RC         visit_record(Table *table, Record &record, ReadWriteMode mode) override;
-  RC         start_if_need() override;
-  RC         commit() override;
-  RC         rollback() override;
+  RC update_record(Table *table, Record &record, Record &update_record, const Field_LOB_ANNO *record_lob_anno) override;
+  RC visit_record(Table *table, Record &record, ReadWriteMode mode) override;
+  RC start_if_need() override;
+  RC commit() override;
+  RC rollback() override;
 
   RC redo(Db *db, const LogEntry &log_entry) override;
 

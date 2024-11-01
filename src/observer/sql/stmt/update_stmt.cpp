@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/stmt/update_stmt.h"
 #include "common/log/log.h"
+#include "common/type/attr_type.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
@@ -61,7 +62,7 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
   }
 
   // check whether the field exists
-  const std::vector<FieldMeta> &field_metas = *table->table_meta().field_metas();
+  const std::vector<FieldMeta> &field_metas = *table->table_meta().output_field_metas();
   // const FieldMeta              *update_field     = nullptr;
   std::vector<FieldMeta> update_fields;
 
@@ -84,7 +85,11 @@ RC UpdateStmt::create(Db *db, const UpdateSqlNode &update, Stmt *&stmt)
     if (values[i].attr_type() != update_fields[i].type()) {
       LOG_WARN("value used to update record type %d does not match field `%s` type %d",
         values[i].attr_type(), update_fields[i].name(), update_fields[i].type());
-      return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      if(values[i].attr_type() == AttrType::CHARS && update_fields[i].type() == AttrType::TEXTS){
+        // do nothing
+      } else {
+        return RC::SCHEMA_FIELD_TYPE_MISMATCH;
+      }
     }
   }
 

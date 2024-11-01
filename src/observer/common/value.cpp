@@ -128,6 +128,7 @@ void Value::reset()
 void Value::set_data(char *data, int length)
 {
   switch (attr_type_) {
+    case AttrType::TEXTS:
     case AttrType::CHARS: {
       set_string(data, length);
     } break;
@@ -244,6 +245,7 @@ const char *Value::data() const
     case AttrType::VECTORS: {
       return (const char*)value_.vector_value_;
     }break;
+    case AttrType::TEXTS:
     case AttrType::CHARS: {
       return value_.pointer_value_;
     } break;
