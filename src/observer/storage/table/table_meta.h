@@ -51,6 +51,7 @@ public:
   const FieldMeta    *field(int index) const;
   const FieldMeta    *out_field(int index) const;
   const FieldMeta    *field(const char *name) const;
+  const FieldMeta    *out_field(const char *name) const;
   const FieldMeta    *find_field_by_offset(int offset) const;
   auto                field_metas() const -> const std::vector<FieldMeta>            *{ return &fields_; }
   auto                output_field_metas() const -> const std::vector<FieldMeta>     *{ return &output_fields_; }

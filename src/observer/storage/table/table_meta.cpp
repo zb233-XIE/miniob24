@@ -157,13 +157,28 @@ const FieldMeta *TableMeta::trx_field() const { return &fields_[0]; }
 span<const FieldMeta> TableMeta::trx_fields() const { return span<const FieldMeta>(fields_.data(), sys_field_num()); }
 
 const FieldMeta *TableMeta::field(int index) const { return &fields_[index]; }
+
 const FieldMeta *TableMeta::out_field(int index) const { return &output_fields_[index]; }
+
 const FieldMeta *TableMeta::field(const char *name) const
 {
   if (nullptr == name) {
     return nullptr;
   }
   for (const FieldMeta &field : fields_) {
+    if (0 == strcmp(field.name(), name)) {
+      return &field;
+    }
+  }
+  return nullptr;
+}
+
+const FieldMeta *TableMeta::out_field(const char *name) const
+{
+  if (nullptr == name) {
+    return nullptr;
+  }
+  for (const FieldMeta &field : output_fields_) {
     if (0 == strcmp(field.name(), name)) {
       return &field;
     }

@@ -444,6 +444,11 @@ public:
   RC delete_record(const RID *rid);
 
   /**
+   * @brief 删除大对象字段
+  */
+  RC delete_lob_field(PageNum first_page_num);
+
+  /**
    * @brief 插入一个新的记录到指定文件中，并返回该记录的标识符
    *
    * @param data        纪录内容
@@ -460,6 +465,13 @@ public:
   RC insert_record(char *data, int record_size, const Field_LOB_ANNO *record_lob_anno, RID *rid);
 
   RC update_record(const char *data, const RID *rid);
+
+  /**
+   * @brief 插入一个可能溢出的含大对象的新记录到指定文件中，返回记录标识符
+   * @param data            记录内容
+   * @param record_lob_anno 记录每个field是否为大对象或是否溢出的记录
+   */
+  RC update_record(const char *data, const Field_LOB_ANNO *record_lob_anno, const RID *rid);
 
   /**
    * @brief 数据库恢复时，在指定文件指定位置插入数据

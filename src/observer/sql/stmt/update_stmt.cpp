@@ -20,6 +20,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/optimizer/logical_plan_generator.h"
 #include "sql/optimizer/optimize_stage.h"
 #include "sql/optimizer/physical_plan_generator.h"
+#include "common/type/attr_type.h"
 #include "sql/stmt/filter_stmt.h"
 #include "sql/stmt/select_stmt.h"
 #include "storage/db/db.h"
@@ -158,7 +159,7 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
   }
 
   // check whether the field exists
-  const std::vector<FieldMeta> &field_metas = *table->table_meta().field_metas();
+  const std::vector<FieldMeta> &field_metas = *table->table_meta().output_field_metas();
   // const FieldMeta              *update_field     = nullptr;
   std::vector<FieldMeta> update_fields;
 
@@ -179,13 +180,17 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
 
     // check whether the type of field and value is the same
     if (values[i].attr_type() != update_fields[i].type() && !values[i].get_null()) {
-      Value casted_value;
-      RC rc = Value::cast_to(values[i], update_fields[i].type(), casted_value);
-      if (rc == RC::SUCCESS) {
-        values[i] = casted_value;
+      if (values[i].attr_type() == AttrType::CHARS && update_fields[i].type() == AttrType::TEXTS) {
+        // do nothing
       } else {
-        LOG_WARN("failed to cast value to field type. rc=%d:%s", rc, strrc(rc));
-        update_internal_error = true;
+        Value casted_value;
+        RC    rc = Value::cast_to(values[i], update_fields[i].type(), casted_value);
+        if (rc == RC::SUCCESS) {
+          values[i] = casted_value;
+        } else {
+          LOG_WARN("failed to cast value to field type. rc=%d:%s", rc, strrc(rc));
+          update_internal_error = true;
+        }
       }
     }
 

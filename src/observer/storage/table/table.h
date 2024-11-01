@@ -73,7 +73,7 @@ public:
    */
   RC make_record(int value_num, const Value *values, Record &record);
 
-  RC make_record_lob_anno(int value_num, const Value *values, Record_LOB_ANNO& record_lob_anno);
+  RC make_record_lob_anno(int value_num, const Value *values, Record_LOB_ANNO &record_lob_anno);
 
   /**
    * @brief 在当前的表中插入一条记录
@@ -81,10 +81,11 @@ public:
    * @param record[in/out] 传入的数据包含具体的数据，插入成功会通过此字段返回RID
    */
   RC insert_record(Record &record);
-  RC insert_record(Record &record, const Field_LOB_ANNO* record_lob_anno);
+  RC insert_record(Record &record, const Field_LOB_ANNO *record_lob_anno);
   RC delete_record(const Record &record);
   RC delete_record(const RID &rid);
   RC update_record(const Record &record, char *update_data);
+  RC update_record(Record &record, Record &update_record, const Field_LOB_ANNO *record_lob_anno);
   RC get_record(const RID &rid, Record &record);
 
   RC recover_insert_record(Record &record);
@@ -126,16 +127,16 @@ private:
   RC init_record_handler(const char *base_dir);
 
 public:
-  Index *find_index(const char *index_name) const;
-  Index *find_index_by_field(const char *field_name) const;
+  Index                 *find_index(const char *index_name) const;
+  Index                 *find_index_by_field(const char *field_name) const;
   const vector<Index *> &indexes() const { return indexes_; }
 
 private:
-  Db                *db_ = nullptr;
-  string             base_dir_;
-  TableMeta          table_meta_;
-  TableMeta          output_table_meta_;           /// 解决含有大对象字段导致的存入与输出大小不对称的问题
-  DiskBufferPool    *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool
-  RecordFileHandler *record_handler_   = nullptr;  /// 记录操作
+  Db             *db_ = nullptr;
+  string          base_dir_;
+  TableMeta       table_meta_;
+  TableMeta       output_table_meta_;  /// 解决含有大对象字段导致的存入与输出大小不对称的问题
+  DiskBufferPool *data_buffer_pool_  = nullptr;  /// 数据文件关联的buffer pool
+  RecordFileHandler *record_handler_ = nullptr;  /// 记录操作
   vector<Index *>    indexes_;
 };

@@ -366,7 +366,7 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
       return RC::UNSUPPORTED;
     }
     copy_len -= sizeof(PageNum);
-    *(record_data + field->offset() + copy_len) = BP_INVALID_PAGE_NUM;
+    *(PageNum *)(record_data + field->offset() + copy_len) = BP_INVALID_PAGE_NUM;
     if (copy_len > data_len) {
       copy_len = data_len + 1;
     }
@@ -581,6 +581,19 @@ RC Table::update_record(const Record &record, char *update_data)
   }
 
   rc = record_handler_->update_record(update_data, &record.rid());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("fail to update record. table_name: %s", table_meta_.name());
+    return rc;
+  }
+  return rc;
+}
+
+RC Table::update_record(Record &record, Record &update_record, const Field_LOB_ANNO *record_lob_anno)
+{
+  RC rc = RC::SUCCESS;
+
+  // do not consider index for now
+  rc = record_handler_->update_record(update_record.data(), record_lob_anno, &record.rid());
   if (rc != RC::SUCCESS) {
     LOG_ERROR("fail to update record. table_name: %s", table_meta_.name());
     return rc;

@@ -144,11 +144,18 @@ public:
   Trx()          = default;
   virtual ~Trx() = default;
 
-  virtual RC insert_record(Table *table, Record &record)                                                    = 0;
-  virtual RC insert_record(Table *table, Record &record, const Field_LOB_ANNO* record_lob_anno) { return RC::UNIMPLEMENTED; };
-  virtual RC delete_record(Table *table, Record &record)                                                    = 0;
-  virtual RC update_record(Table *table, Record &record, char *update_data)                                 = 0;
-  virtual RC visit_record(Table *table, Record &record, ReadWriteMode mode)                                 = 0;
+  virtual RC insert_record(Table *table, Record &record) = 0;
+  virtual RC insert_record(Table *table, Record &record, const Field_LOB_ANNO *record_lob_anno)
+  {
+    return RC::UNIMPLEMENTED;
+  };
+  virtual RC delete_record(Table *table, Record &record)                    = 0;
+  virtual RC update_record(Table *table, Record &record, char *update_data) = 0;
+  virtual RC update_record(Table *table, Record &record, Record &update_record, const Field_LOB_ANNO *record_lob_anno)
+  {
+    return RC::UNIMPLEMENTED;
+  }
+  virtual RC visit_record(Table *table, Record &record, ReadWriteMode mode) = 0;
 
   virtual RC start_if_need() = 0;
   virtual RC commit()        = 0;
