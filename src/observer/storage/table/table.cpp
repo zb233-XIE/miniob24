@@ -416,7 +416,7 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
       return RC::UNSUPPORTED;
     }
     copy_len -= sizeof(PageNum);
-    *(record_data + field->offset() + copy_len) = BP_INVALID_PAGE_NUM;
+    *(PageNum *)(record_data + field->offset() + copy_len) = BP_INVALID_PAGE_NUM;
     if (copy_len > data_len) {
       copy_len = data_len + 1;
     }
