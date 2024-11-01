@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/group_by_physical_operator.h"
 #include "sql/expr/composite_tuple.h"
+#include <memory>
 
 /**
  * @brief Group By Hash 方式物理算子
@@ -28,7 +29,7 @@ class HashGroupByPhysicalOperator : public GroupByPhysicalOperator
 {
 public:
   HashGroupByPhysicalOperator(
-      std::vector<std::unique_ptr<Expression>> &&group_by_exprs, std::vector<Expression *> &&expressions);
+      std::vector<std::unique_ptr<Expression>> &&group_by_exprs, std::vector<Expression *> &&expressions, unique_ptr<Expression> &having_check);
 
   virtual ~HashGroupByPhysicalOperator() = default;
 
@@ -49,6 +50,11 @@ private:
 private:
   RC find_group(const Tuple &child_tuple, GroupType *&found_group);
 
+  void analysis_having_check(Expression *);
+
+  AggregatorList &get_having_aggregator_list(int idx) { return having_aggregator_lists_[idx]; }
+  CompositeTuple &get_composite_tuple(int idx) { return composite_tuple_list_[idx]; }
+
 private:
   std::vector<std::unique_ptr<Expression>> group_by_exprs_;
 
@@ -59,4 +65,13 @@ private:
 
   std::vector<GroupType>::iterator current_group_;
   bool                             first_emited_ = false;  /// 第一条数据是否已经输出
+
+  std::vector<Expression *> having_aggregate_expressions_;  // having_check_中找到的所有聚合表达式
+  std::vector<Expression *> having_value_expressions_;  // 计算聚合时的表达式(即聚合函数括号里的东西)
+  std::vector<Expression *> having_field_expressions_; // having_check_中找到的field表达式
+  std::vector<AggregatorList> having_aggregator_lists_;  // vector对应第几个group
+  std::vector<CompositeTuple>
+      composite_tuple_list_;  // vector对应第几个group，having_check_中表达式的值都可以在这里找到
+  unique_ptr<Expression> having_check_;
+  int idx_; // 对应groups_中的第几个
 };

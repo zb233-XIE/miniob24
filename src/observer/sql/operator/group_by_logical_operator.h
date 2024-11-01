@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include "sql/operator/logical_operator.h"
+#include <memory>
 
 class GroupByLogicalOperator : public LogicalOperator
 {
@@ -28,8 +29,13 @@ public:
 
   auto &group_by_expressions() { return group_by_expressions_; }
   auto &aggregate_expressions() { return aggregate_expressions_; }
+  auto &havinga_check() { return having_check_; }
+  
+  void set_having_check(unique_ptr<Expression> &having_expr) { having_check_ = std::move(having_expr); }
 
 private:
   std::vector<std::unique_ptr<Expression>> group_by_expressions_;
   std::vector<Expression *>                aggregate_expressions_;  ///< 输出的表达式，可能包含聚合函数
+
+  unique_ptr<Expression> having_check_;
 };

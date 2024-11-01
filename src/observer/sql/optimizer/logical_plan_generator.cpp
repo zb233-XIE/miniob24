@@ -151,8 +151,21 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     last_oper = &predicate_oper;
   }
 
+  // having
+  unique_ptr<LogicalOperator> having_predicate_oper;
+  rc = create_plan(select_stmt->having_filter_stmt(), having_predicate_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  unique_ptr<Expression> having_expression;
+  if (having_predicate_oper) {
+    having_expression = std::move(having_predicate_oper->expressions().front());
+  }
+
   unique_ptr<LogicalOperator> group_by_oper;
-  rc = create_group_by_plan(select_stmt, group_by_oper);
+  rc = create_group_by_plan(select_stmt, group_by_oper, having_expression);
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
     return rc;
@@ -164,22 +177,6 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }
 
     last_oper = &group_by_oper;
-  }
-
-  // 在project和groupby之间插入having的predict
-  unique_ptr<LogicalOperator> having_predicate_oper;
-  rc = create_plan(select_stmt->having_filter_stmt(), having_predicate_oper);
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
-    return rc;
-  }
-
-  if (having_predicate_oper) {
-    if (*last_oper) {
-      having_predicate_oper->add_child(std::move(*last_oper));
-    }
-
-    last_oper = &having_predicate_oper;
   }
 
   // 插入SubqueryLogiclOperator
@@ -441,7 +438,7 @@ RC LogicalPlanGenerator::create_plan(ExplainStmt *explain_stmt, unique_ptr<Logic
   return rc;
 }
 
-RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
+RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator, unique_ptr<Expression> &having_expr)
 {
   vector<unique_ptr<Expression>> &group_by_expressions = select_stmt->group_by();
   vector<Expression *> aggregate_expressions;
@@ -521,6 +518,9 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
 
   auto group_by_oper = make_unique<GroupByLogicalOperator>(std::move(group_by_expressions),
                                                            std::move(aggregate_expressions));
+  if (having_expr) {
+    group_by_oper->set_having_check(having_expr);
+  }
   logical_operator = std::move(group_by_oper);
   return RC::SUCCESS;
 }
