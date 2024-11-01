@@ -804,6 +804,12 @@ expression_list:
       $$ = new std::vector<std::unique_ptr<Expression>>;
       $$->emplace_back($1);
     }
+    | expression AS ID {
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+      $$->back()->set_name($3);
+      free($3);
+    }
     | expression COMMA expression_list
     {
       if ($3 != nullptr) {
@@ -812,6 +818,17 @@ expression_list:
         $$ = new std::vector<std::unique_ptr<Expression>>;
       }
       $$->emplace($$->begin(), $1);
+    }
+    | expression AS ID COMMA expression_list
+    {
+      if ($5 != nullptr) {
+        $$ = $5;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+      $$->back()->set_name($3);
+      free($3);
     }
     ;
 expression:
