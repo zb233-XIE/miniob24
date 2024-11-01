@@ -27,8 +27,6 @@ See the Mulan PSL v2 for more details. */
 #include <cstddef>
 #include <cstring>
 #include <memory>
-#include <sys/_types/_int16_t.h>
-#include <sys/_types/_int32_t.h>
 
 using namespace common;
 

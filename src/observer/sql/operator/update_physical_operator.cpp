@@ -3,7 +3,6 @@
 #include "storage/field/field_meta.h"
 #include "storage/record/record.h"
 #include "storage/trx/trx.h"
-#include <sys/_types/_size_t.h>
 
 RC UpdatePhysicalOperator::open(Trx *trx)
 {

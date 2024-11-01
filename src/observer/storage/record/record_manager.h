@@ -23,9 +23,6 @@ See the Mulan PSL v2 for more details. */
 #include "storage/record/record.h"
 #include "storage/record/record_log.h"
 #include "common/types.h"
-#include <sys/_types/_int16_t.h>
-#include <sys/_types/_int32_t.h>
-#include <sys/_types/_size_t.h>
 
 class LogHandler;
 class ConditionFilter;
