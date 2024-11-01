@@ -47,7 +47,13 @@ public:
     std::vector<AttrInfoSqlNode> attr_infos;
     for (size_t i = 0; i < expressions_.size(); i++) {
       AttrInfoSqlNode attr_info;
+      // check if attr_info.name has the form table_name.field_name
+      // if yes, set name to field_name
       attr_info.name = expressions_[i]->name();
+      size_t pos = attr_info.name.find(".");
+      if (pos != std::string::npos) {
+        attr_info.name = attr_info.name.substr(pos + 1);
+      }
       attr_info.type = expressions_[i]->value_type();
       attr_info.length = expressions_[i]->value_length();
       attr_info.nullable = true;
