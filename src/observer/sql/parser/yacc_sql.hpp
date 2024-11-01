@@ -154,6 +154,7 @@ union YYSTYPE
   SetClauseSqlNode *                         set_clause;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
+  RelationSqlNode *                          relation;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   // std::vector<Expression *> *                agg_fun_attr_list;
@@ -164,7 +165,7 @@ union YYSTYPE
   std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *> *  join_tuple_list;
   std::tuple<std::string, std::vector<ConditionSqlNode> *> *  join_tuple;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  std::vector<RelationSqlNode> *             relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
   std::vector<float> *                       vector_elem_list;
   char *                                     string;
@@ -174,7 +175,7 @@ union YYSTYPE
   bool                                       nullable_spec;
   bool                                       asc_desc;
 
-#line 178 "yacc_sql.hpp"
+#line 179 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

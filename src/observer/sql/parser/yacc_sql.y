@@ -171,6 +171,7 @@ bool is_valid_date(const char *date) {
   SetClauseSqlNode *                         set_clause;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
+  RelationSqlNode *                          relation;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   // std::vector<Expression *> *                agg_fun_attr_list;
@@ -181,7 +182,7 @@ bool is_valid_date(const char *date) {
   std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *> *  join_tuple_list;
   std::tuple<std::string, std::vector<ConditionSqlNode> *> *  join_tuple;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  std::vector<RelationSqlNode> *             relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
   std::vector<float> *                       vector_elem_list;
   char *                                     string;
@@ -204,8 +205,7 @@ bool is_valid_date(const char *date) {
 %type <condition>           condition
 %type <value>               value
 %type <number>              number
-%type <string>              relation
-/* %type <condition>           subquery */
+%type <relation>            relation
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <expression>          agg_fun_attr
@@ -357,8 +357,13 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       create_index.index_name = $3;
       create_index.relation_name = $5;
       create_index.unique = false;
+
       if ($7 != nullptr) {
-        create_index.attributes.swap(*$7);
+        std::vector<std::string> attributes;
+        for (auto &rel : *$7) {
+          attributes.emplace_back(rel.name);
+        }
+        create_index.attributes.swap(attributes);
         delete $7;
       }
       free($3);
@@ -371,8 +376,12 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       create_index.index_name = $4;
       create_index.relation_name = $6;
       create_index.unique = true;
-      if ($8 != nullptr) {
-        create_index.attributes.swap(*$8);
+      if ($8 != nullptr) {        
+        std::vector<std::string> attributes;
+        for (auto &rel : *$8) {
+          attributes.emplace_back(rel.name);
+        }
+        create_index.attributes.swap(attributes);
         delete $8;
       }
       free($4);
@@ -956,24 +965,40 @@ rel_attr:
 
 relation:
     ID {
-      $$ = $1;
+      $$ = new RelationSqlNode();
+      $$->name = $1;
+      free($1);
+    }
+    | ID ID {
+      $$ = new RelationSqlNode();
+      $$->name = $1;
+      $$->alias = $2;
+      free($1);
+      free($2);
+    }
+    | ID AS ID {
+      $$ = new RelationSqlNode();
+      $$->name = $1;
+      $$->alias = $3;
+      free($1);
+      free($3);
     }
     ;
 rel_list:
     relation {
-      $$ = new std::vector<std::string>();
-      $$->push_back($1);
-      free($1);
+      $$ = new std::vector<RelationSqlNode>();
+      $$->push_back(*$1);
+      delete($1);
     }
     | relation COMMA rel_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new std::vector<RelationSqlNode>;
       }
 
-      $$->insert($$->begin(), $1);
-      free($1);
+      $$->insert($$->begin(), *$1);
+      delete($1);
     }
     ;
 
@@ -999,7 +1024,7 @@ join_list:
 
 join:
     INNER JOIN relation ON condition_list {
-      $$ = new std::tuple<std::string, std::vector<ConditionSqlNode> *>($3, $5);
+      $$ = new std::tuple<std::string, std::vector<ConditionSqlNode> *>($3->name, $5);
       free($3);
     }
 

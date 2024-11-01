@@ -112,6 +112,9 @@ public:
   int32_t     table_id() const { return table_meta_.table_id(); }
   const char *name() const;
 
+  void set_alias(std::string alias) { alias_ = alias; }
+  const char *alias() const { return alias_.c_str(); }
+
   Db *db() const { return db_; }
 
   const TableMeta &table_meta() const;
@@ -139,4 +142,5 @@ private:
   DiskBufferPool *data_buffer_pool_  = nullptr;  /// 数据文件关联的buffer pool
   RecordFileHandler *record_handler_ = nullptr;  /// 记录操作
   vector<Index *>    indexes_;
+  std::string        alias_;
 };
