@@ -43,11 +43,11 @@ bool CharType::cast_to_vector(char* src, Value& result) const
     for(int i=0; i<len; i++){
       char*& elem_str = elems_str[i];
       elem_str = common::strip(elem_str);
-      int sz = std::strlen(elem_str);
+      size_t sz = std::strlen(elem_str);
       size_t pos;
       try {
         *(elems + i) = std::stof(elem_str, &pos);
-      } catch (const std::invalid_argument err) {
+      } catch (const std::invalid_argument& err) {
         LOG_INFO("Invalid input: %s is not a valid float", elem_str);
         delete [] elems;
         return false;
@@ -77,6 +77,17 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
         return RC::INVALID_ARGUMENT;
       }
     } break;
+    case AttrType::TEXTS: {
+      // to avoid data copy, directly copy pointer & length
+      // but set own_data to false
+      // memory management is not result[out]'s job
+      result.reset();
+      result.attr_type_ = val.attr_type_;
+      result.value_ = val.value_;
+      result.length_ = val.length_;
+      result.own_data_ = false;
+      return RC::SUCCESS;
+    } break;
     default: return RC::UNSUPPORTED;
   }
   return RC::SUCCESS;
@@ -95,7 +106,8 @@ int CharType::cast_cost(AttrType type)
 RC CharType::to_string(const Value &val, string &result) const
 {
   stringstream ss;
-  ss << val.value_.pointer_value_;
-  result = ss.str();
+  int len = 0;
+  while(len < val.length_ && *(val.value_.pointer_value_ + len) != '0') len++;
+  result = string(val.value_.pointer_value_, len);
   return RC::SUCCESS;
 }

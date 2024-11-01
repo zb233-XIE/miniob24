@@ -106,6 +106,7 @@ public:
     if (owner_ && data_ != nullptr) {
       free(data_);
       data_ = nullptr;
+      owner_ = false;
     }
   }
 
@@ -203,6 +204,7 @@ public:
   {
     ASSERT(len!= 0, "the len of data should not be 0");
     char *tmp = (char *)malloc(len);
+    memset(tmp, 0, len);
     if (nullptr == tmp) {
       LOG_WARN("failed to allocate memory. size=%d", len);
       return RC::NOMEM;
@@ -245,4 +247,78 @@ private:
   char *data_  = nullptr;
   int   len_   = 0;      /// 如果不是record自己来管理内存，这个字段可能是无效的
   bool  owner_ = false;  /// 表示当前是否由record来管理内存
+};
+
+// Corresponds to every field in record
+// Used in insertion
+// => non-lob field: do nothing
+// => lob fields that don't overflow: do nothing
+// => lob fields that overflow: data pointer and len
+class Field_LOB_ANNO{
+public:
+  Field_LOB_ANNO(){
+    is_lob_field_ = false;
+    overflow_ = false;
+    data_ = nullptr;
+    data_len_ = 0;
+  }
+
+  ~Field_LOB_ANNO() = default;
+
+  Field_LOB_ANNO &operator=(const Field_LOB_ANNO &other)
+  {
+    this->is_lob_field_ = other.is_lob_field_;
+    this->overflow_     = other.overflow_;
+    this->data_         = other.data_;
+    this->data_len_     = other.data_len_;
+    return *this;
+  }
+
+  void set_data(char *data, int len){
+    is_lob_field_ = true;
+    overflow_ = true;
+    data_ = data;
+    data_len_ = len;
+  }
+
+  void set_lob_field(){ is_lob_field_ = true; }
+  bool is_lob_field() const { return is_lob_field_; }
+  bool overflow() const { return overflow_; }
+  const char* data() const { return data_; }
+  int data_len() const { return data_len_; }
+private:
+  bool  is_lob_field_;
+  bool  overflow_;
+  char *data_ = nullptr;
+  // [ATT!]: never own data
+  int   data_len_ = 0;
+};
+
+class Record_LOB_ANNO{
+  public:
+    Record_LOB_ANNO() = default;
+    ~Record_LOB_ANNO() = default;
+    
+    void init(int size) {
+      field_annos_.clear();
+      field_annos_.resize(size);
+    }
+
+    const Field_LOB_ANNO* data(){
+      return field_annos_.data();
+    }
+
+    int size() { return field_annos_.size(); }
+
+    RC set_field(int index, Field_LOB_ANNO& field_anno){
+      if(index >= field_annos_.size()){
+        LOG_ERROR("field index out of range");
+        return RC::INTERNAL;
+      }
+      field_annos_[index] = field_anno;
+      return RC::SUCCESS;
+    }
+
+  private:
+    vector<Field_LOB_ANNO> field_annos_;
 };

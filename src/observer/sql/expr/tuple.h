@@ -203,6 +203,9 @@ public:
     cell.set_type(field_meta->type());
     char* data = this->record_->data() + field_meta->offset();
     int len = field_meta->len();
+    if(cell.attr_type() == AttrType::TEXTS){
+      cell.set_type(AttrType::CHARS);
+    }
     if(field_meta->type() == AttrType::VECTORS){
       len /= sizeof(float);
     }

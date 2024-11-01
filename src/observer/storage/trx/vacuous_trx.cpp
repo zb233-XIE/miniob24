@@ -34,6 +34,11 @@ LogReplayer *VacuousTrxKit::create_log_replayer(Db &, LogHandler &) { return new
 
 RC VacuousTrx::insert_record(Table *table, Record &record) { return table->insert_record(record); }
 
+RC VacuousTrx::insert_record(Table *table, Record &record, const Field_LOB_ANNO *record_lob_anno)
+{
+  return table->insert_record(record, record_lob_anno);
+}
+
 RC VacuousTrx::delete_record(Table *table, Record &record) { return table->delete_record(record); }
 
 RC VacuousTrx::update_record(Table *table, Record &record, char *update_data) { return table->update_record(record, update_data); }

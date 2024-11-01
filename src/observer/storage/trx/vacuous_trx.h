@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include "storage/record/record.h"
 #include "storage/trx/trx.h"
 
 /**
@@ -44,13 +45,14 @@ public:
   VacuousTrx()          = default;
   virtual ~VacuousTrx() = default;
 
-  RC insert_record(Table *table, Record &record) override;
-  RC delete_record(Table *table, Record &record) override;
-  RC update_record(Table *table, Record &record, char *update_data) override;
-  RC visit_record(Table *table, Record &record, ReadWriteMode mode) override;
-  RC start_if_need() override;
-  RC commit() override;
-  RC rollback() override;
+  virtual RC insert_record(Table *table, Record &record) override;
+  virtual RC insert_record(Table *table, Record &record, const Field_LOB_ANNO *record_lob_anno) override;
+  RC         delete_record(Table *table, Record &record) override;
+  RC         update_record(Table *table, Record &record, char *update_data) override;
+  RC         visit_record(Table *table, Record &record, ReadWriteMode mode) override;
+  RC         start_if_need() override;
+  RC         commit() override;
+  RC         rollback() override;
 
   RC redo(Db *db, const LogEntry &log_entry) override;
 
