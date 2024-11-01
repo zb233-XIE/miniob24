@@ -4,7 +4,6 @@
 #include "storage/record/record.h"
 #include "event/sql_debug.h"
 #include "storage/trx/trx.h"
-#include <sys/_types/_size_t.h>
 
 RC UpdatePhysicalOperator::open(Trx *trx)
 {

@@ -27,8 +27,6 @@ See the Mulan PSL v2 for more details. */
 #include <cstddef>
 #include <cstring>
 #include <memory>
-#include <cstring>
-#include <memory>
 
 using namespace common;
 
