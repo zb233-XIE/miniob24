@@ -35,10 +35,18 @@ RC CreateTableExecutor::execute(SQLStageEvent *sql_event)
   std::unique_ptr<PhysicalOperator> physical_oper;
 
   if (create_table_stmt->has_subquery()) {
-    RC rc = get_attrs_from_subq(session->get_current_db(), create_table_stmt, physical_oper);
+    RC rc = generate_physical_plan(session->get_current_db(), create_table_stmt, physical_oper);
     if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to execute subquery. rc=%d:%s", rc, strrc(rc));
+      LOG_WARN("failed to generate physical plan for subquery. rc=%d:%s", rc, strrc(rc));
       return rc;
+    }
+
+    if (create_table_stmt->attr_infos().empty()) {
+      rc = get_attrs_from_subq(session->get_current_db(), create_table_stmt, physical_oper);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to get attributes from subquery. rc=%d:%s", rc, strrc(rc));
+        return rc;
+      }
     }
   }
 
@@ -66,8 +74,7 @@ RC CreateTableExecutor::execute(SQLStageEvent *sql_event)
   return rc;
 }
 
-RC CreateTableExecutor::get_attrs_from_subq(Db *db, CreateTableStmt *create_stmt, std::unique_ptr<PhysicalOperator> &oper)
-{
+RC CreateTableExecutor::generate_physical_plan(Db *db, CreateTableStmt *create_stmt, std::unique_ptr<PhysicalOperator> &oper) {
   RC rc = RC::SUCCESS;
   SelectStmt *select_stmt = create_stmt->get_subquery();
 
@@ -92,6 +99,14 @@ RC CreateTableExecutor::get_attrs_from_subq(Db *db, CreateTableStmt *create_stmt
     LOG_WARN("failed to create physical operator. rc=%d:%s", rc, strrc(rc));
     return rc;
   }
+
+  oper = std::move(physical_oper);
+  return rc;
+}
+
+RC CreateTableExecutor::get_attrs_from_subq(Db *db, CreateTableStmt *create_stmt, std::unique_ptr<PhysicalOperator> &physical_oper)
+{
+  RC rc = RC::SUCCESS;
 
   TupleSchema schema;
   physical_oper->tuple_schema(schema);
@@ -146,7 +161,6 @@ RC CreateTableExecutor::get_attrs_from_subq(Db *db, CreateTableStmt *create_stmt
   }
 
   create_stmt->set_attr_infos(attr_infos);
-  oper = std::move(physical_oper);
   return rc;
 }
 
