@@ -406,7 +406,20 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     if (copy_len > data_len) {
       copy_len = data_len + 1;
     }
-  }
+  } else if (field->type() == AttrType::TEXTS) {
+    // for AttrType::TEXT
+    // storage model: | ---- data ---- | 4B for page num |
+    // len <= TEXT_THRESHOLD: Same as AttrType::CHAR, directly store data in record
+    // len > TEXT_THRESHOLD : Store data that don't fit elsewhere
+    if (data_len > LOB_MAX_SIZE) {
+      LOG_ERROR("TEXT type length %d > maximum supported length %d", data_len, LOB_MAX_SIZE);
+      return RC::UNSUPPORTED;
+    }
+    copy_len -= sizeof(PageNum);
+    *(record_data + field->offset() + copy_len) = BP_INVALID_PAGE_NUM;
+    if (copy_len > data_len) {
+      copy_len = data_len + 1;
+    }
 
   if (value.get_null() == 1) {
     // set value to null magic number
@@ -419,8 +432,8 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     memcpy(record_data + field->offset(), value.data(), copy_len);
   }
 
-  return RC::SUCCESS;
-}
+    return RC::SUCCESS;
+  }
 
 RC Table::init_record_handler(const char *base_dir)
 {
