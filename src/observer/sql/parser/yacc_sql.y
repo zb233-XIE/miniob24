@@ -154,6 +154,8 @@ bool is_valid_date(const char *date) {
 
         NULL_T
         NOT_NULL_T
+				ORDER_BY
+				ASC
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -168,6 +170,8 @@ bool is_valid_date(const char *date) {
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   // std::vector<Expression *> *                agg_fun_attr_list;
+  OrderByItem *                              order_by_item;
+  std::vector<OrderByItem> *                 order_by_list;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
   std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *> *  join_tuple_list;
@@ -181,6 +185,7 @@ bool is_valid_date(const char *date) {
   float                                      floats;
   char *                                     date;
   bool                                       nullable_spec;
+  bool                                       asc_desc;
 }
 
 %token <number> NUMBER
@@ -240,6 +245,10 @@ bool is_valid_date(const char *date) {
 %type <set_clause>          set_clause
 %type <set_clause_list>     set_clause_list
 %type <nullable_spec>       nullable_spec
+%type <order_by_item>       order_by_item
+%type <asc_desc>            asc_desc
+%type <order_by_list>       order_by_list
+%type <order_by_list>       order_by
 
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
@@ -632,7 +641,7 @@ set_clause:
   }
   ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list join_list where group_by having
+    SELECT expression_list FROM rel_list join_list where group_by having order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -670,8 +679,69 @@ select_stmt:        /*  select 语句的语法解析树*/
         $$->selection.having.swap(*$8);
         delete $8;
       }
-    }
-    ;
+
+			if ($9 != nullptr) {
+				$$->selection.order_by.swap(*$9);
+				delete $9;
+			}
+	}
+	;
+
+order_by:
+	/* empty */
+	{
+		$$ = nullptr;
+	}
+	| ORDER_BY order_by_list
+	{
+		$$ = $2;
+	}
+	;
+
+order_by_list:
+	order_by_item
+	{
+		$$ = new std::vector<OrderByItem>;
+		$$->emplace_back(*$1);
+		delete $1;
+	}
+	| order_by_item COMMA order_by_list
+	{
+		if ($3 != nullptr) {
+			$$ = $3;
+		} else {
+			$$ = new std::vector<OrderByItem>;
+		}
+		$$->emplace($$->begin(), *$1);
+		delete $1;
+	}
+	;
+
+order_by_item:
+	rel_attr asc_desc
+	{
+		$$ = new OrderByItem;
+		$$->attr = *$1;
+		$$->asc = $2;
+		delete $1;
+	}
+	;
+
+asc_desc:
+	/* empty */
+	{
+		$$ = true; // default is ascending
+	}
+	| ASC
+	{
+		$$ = true;
+	}
+	| DESC
+	{
+		$$ = false;
+	}
+	;
+
 calc_stmt:
     CALC expression_list
     {

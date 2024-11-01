@@ -310,6 +310,14 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     LOG_WARN("cannot construct filter stmt");
     return rc;
   }
+  
+  // 17. create orderby stmt
+  OrderByStmt *order_by_stmt;
+  if (select_sql.order_by.empty()) {
+    order_by_stmt = nullptr;
+  } else {
+    order_by_stmt = new OrderByStmt(select_sql.order_by); 
+  }
 
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
@@ -321,6 +329,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->join_filter_stmts_.swap(filter_stmts);
   select_stmt->having_filter_stmt_ = having_filter_stmt;
   select_stmt->subquery_stmt_ = subquery_stmt;
+  select_stmt->order_by_ = order_by_stmt;
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }

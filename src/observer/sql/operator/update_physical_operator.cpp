@@ -40,7 +40,7 @@ RC UpdatePhysicalOperator::open(Trx *trx) {
 
     for (size_t i = 0; i < fields_.size(); i++) {
       if (values_[i].get_null()) {
-        *(int32_t *)(updated_data + fields_[i].offset()) = NULL_MAGIC_NUMBER;
+        *(int8_t *)(updated_data + fields_[i].offset()) = NULL_MAGIC_NUMBER;
         continue;
       }
       

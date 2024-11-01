@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 #include "sql/stmt/stmt.h"
+#include "sql/stmt/order_by_stmt.h"
 #include "storage/field/field.h"
 
 class FieldMeta;
@@ -51,6 +52,7 @@ public:
 
   std::vector<std::unique_ptr<Expression>> &query_expressions() { return query_expressions_; }
   std::vector<std::unique_ptr<Expression>> &group_by() { return group_by_; }
+  OrderByStmt                              *order_by() const { return order_by_; }
 
 private:
   std::vector<std::unique_ptr<Expression>> query_expressions_;
@@ -60,4 +62,5 @@ private:
   std::vector<FilterStmt *>                join_filter_stmts_;
   FilterStmt                              *having_filter_stmt_ = nullptr;
   SubqueryStmt                            *subquery_stmt_ = nullptr;
+  OrderByStmt                             *order_by_ = nullptr;
 };

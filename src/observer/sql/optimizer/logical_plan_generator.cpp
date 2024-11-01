@@ -27,6 +27,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/project_logical_operator.h"
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/group_by_logical_operator.h"
+#include "sql/operator/order_by_logical_operator.h"
 #include "sql/operator/subquery_logical_operator.h"
 
 #include "sql/parser/parse_defs.h"
@@ -95,6 +96,12 @@ RC LogicalPlanGenerator::create(Stmt *stmt, unique_ptr<LogicalOperator> &logical
 RC LogicalPlanGenerator::create_plan(CalcStmt *calc_stmt, std::unique_ptr<LogicalOperator> &logical_operator)
 {
   logical_operator.reset(new CalcLogicalOperator(std::move(calc_stmt->expressions())));
+  return RC::SUCCESS;
+}
+
+RC LogicalPlanGenerator::create_plan(OrderByStmt *order_stmt, unique_ptr<LogicalOperator> &logical_operator)
+{
+  logical_operator = order_stmt != nullptr ? make_unique<OrderByLogicalOperator>(order_stmt->items()) : nullptr;
   return RC::SUCCESS;
 }
 
@@ -220,7 +227,20 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     project_oper->set_multi_tables_flag();
   }
 
-  logical_operator = std::move(project_oper);
+  unique_ptr<LogicalOperator> order_by_oper;
+  rc = create_plan(select_stmt->order_by(), order_by_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create order by logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if (order_by_oper) {
+    order_by_oper->add_child(std::move(project_oper));
+    logical_operator = std::move(order_by_oper);
+  } else {
+    logical_operator = std::move(project_oper);
+  }
+
   return RC::SUCCESS;
 }
 

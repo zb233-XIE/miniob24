@@ -44,6 +44,7 @@ enum class LogicalOperatorType
   GROUP_BY,    ///< 分组
   SUBQUERY,    ///子查询
   DUMB,
+  ORDER_BY,    ///< 排序
 };
 
 /**

@@ -58,6 +58,7 @@ public:
   int  cell_num() const { return static_cast<int>(cells_.size()); }
 
   const TupleCellSpec &cell_at(int i) const { return cells_[i]; }
+  const std::vector<TupleCellSpec> &cells() const { return cells_; }
 
 private:
   std::vector<TupleCellSpec> cells_;
@@ -210,7 +211,7 @@ public:
 
     // check if cell is null
     if (field_meta->nullable()) {
-      int32_t *null_flag = (int32_t *)(this->record_->data() + field_meta->offset());
+      uint8_t *null_flag = (uint8_t *)(this->record_->data() + field_meta->offset());
       if (*null_flag == NULL_MAGIC_NUMBER) {
         cell.set_null();
       }

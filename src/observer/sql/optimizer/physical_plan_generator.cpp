@@ -52,6 +52,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/dumb_logical_operator.h"
 #include "sql/operator/dumb_physical_operator.h"
 #include "sql/parser/parse_defs.h"
+#include "sql/operator/order_by_physical_operator.h"
 
 using namespace std;
 
@@ -107,6 +108,9 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
     case LogicalOperatorType::DUMB: {
       return create_plan(static_cast<DumbLogicalOperator &>(logical_operator), oper);
     }
+    case LogicalOperatorType::ORDER_BY: {
+      return create_plan(static_cast<OrderByLogicalOperator &>(logical_operator), oper);
+    } break;
 
     default: {
       ASSERT(false, "unknown logical operator type");
@@ -487,6 +491,23 @@ RC PhysicalPlanGenerator::create_plan(DumbLogicalOperator &logical_oper, std::un
   auto dumb_operator = make_unique<DumbPhysicalOperator>();
   oper = std::move(dumb_operator);
   LOG_TRACE("create a dumb physical operator");
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(OrderByLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
+{
+  RC rc = RC::SUCCESS;
+  OrderByPhysicalOperator *order_by_oper = new OrderByPhysicalOperator(std::move(logical_oper.items()));
+  oper = std::unique_ptr<PhysicalOperator>(order_by_oper);
+
+  LogicalOperator &child_oper = *logical_oper.children().front();
+  unique_ptr<PhysicalOperator> child_physical_oper;
+  rc = create(child_oper, child_physical_oper);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create child physical operator of order by operator. rc=%s", strrc(rc));
+    return rc;
+  }
+  oper->add_child(std::move(child_physical_oper));
   return rc;
 }
 

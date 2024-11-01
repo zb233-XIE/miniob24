@@ -98,6 +98,11 @@ struct ConditionSqlNode
   int left_is_expr = 1;
 };
 
+struct OrderByItem {
+  RelAttrSqlNode attr;
+  bool asc;
+};
+
 /**
  * @brief 描述一个select语句
  * @ingroup SQLParser
@@ -116,7 +121,7 @@ struct SelectSqlNode
   std::vector<ConditionSqlNode>            conditions;   ///< 查询条件，使用AND串联起来多个条件
   std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
   std::vector<ConditionSqlNode>            having;       /// having条件
-  
+  std::vector<OrderByItem>                 order_by;     ///< order by clause
   std::vector<std::string>                     join_relations; /// 参与join的表
   std::vector<std::vector<ConditionSqlNode> *> join_conditions; /// join两表之间的条件
 };

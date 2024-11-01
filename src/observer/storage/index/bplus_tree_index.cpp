@@ -140,7 +140,7 @@ const char *BplusTreeIndex::make_key(const char *record, bool &has_null)
   char *key = new char[key_len + sizeof(RID)];
   char *pkey = key;
   for (size_t i = 0; i < field_metas_.size(); ++i) {
-    if (*(int32_t *)(record + field_metas_[i].offset()) == NULL_MAGIC_NUMBER) {
+    if (*(uint8_t *)(record + field_metas_[i].offset()) == NULL_MAGIC_NUMBER) {
       has_null = true;
     }
     memcpy(pkey, record + field_metas_[i].offset(), field_metas_[i].len());
