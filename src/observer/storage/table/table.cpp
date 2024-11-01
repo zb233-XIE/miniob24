@@ -316,7 +316,7 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
 
   if (value.get_null() == 1) {
     // set value to null magic number
-    *(int32_t*)(record_data + field->offset()) = NULL_MAGIC_NUMBER;
+    *(uint8_t*)(record_data + field->offset()) = NULL_MAGIC_NUMBER;
   } else {
     memcpy(record_data + field->offset(), value.data(), copy_len);
   }
