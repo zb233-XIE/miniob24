@@ -16,19 +16,29 @@ See the Mulan PSL v2 for more details. */
 #include "common/types.h"
 #include "sql/stmt/create_table_stmt.h"
 #include "event/sql_debug.h"
+#include "sql/stmt/select_stmt.h"
 
 RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt *&stmt)
 {
-  StorageFormat storage_format = StorageFormat::UNKNOWN_FORMAT;
-  if (create_table.storage_format.length() == 0) {
-    storage_format = StorageFormat::ROW_FORMAT;
+  if (!create_table.has_subquery) {
+    StorageFormat storage_format = StorageFormat::UNKNOWN_FORMAT;
+    if (create_table.storage_format.length() == 0) {
+      storage_format = StorageFormat::ROW_FORMAT;
+    } else {
+      storage_format = get_storage_format(create_table.storage_format.c_str());
+    }
+    if (storage_format == StorageFormat::UNKNOWN_FORMAT) {
+      return RC::INVALID_ARGUMENT;
+    }
+    stmt = new CreateTableStmt(create_table.relation_name, create_table.attr_infos, storage_format);
   } else {
-    storage_format = get_storage_format(create_table.storage_format.c_str());
+    SelectStmt *select_stmt = nullptr;
+    Stmt::create_stmt(db, *create_table.subquery, (Stmt *&)select_stmt);
+    CreateTableStmt *create_stmt = new CreateTableStmt(create_table.relation_name, select_stmt); 
+    create_stmt->set_default_subq_table_name(create_table.subquery->selection.relations[0]);
+    stmt = create_stmt;
   }
-  if (storage_format == StorageFormat::UNKNOWN_FORMAT) {
-    return RC::INVALID_ARGUMENT;
-  }
-  stmt = new CreateTableStmt(create_table.relation_name, create_table.attr_infos, storage_format);
+
   sql_debug("create table statement: table name %s", create_table.relation_name.c_str());
   return RC::SUCCESS;
 }

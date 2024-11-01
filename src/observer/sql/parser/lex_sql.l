@@ -155,6 +155,7 @@ NULL                                    RETURN_TOKEN(NULL_T);
 "ORDER BY"                              RETURN_TOKEN(ORDER_BY);
 ASC                                     RETURN_TOKEN(ASC);
 UNIQUE                                  RETURN_TOKEN(UNIQUE);
+AS                                      RETURN_TOKEN(AS);
 L2_DISTANCE                             RETURN_TOKEN(L2_DISTANCE);
 COSINE_DISTANCE                         RETURN_TOKEN(COSINE_DISTANCE);
 INNER_PRODUCT                           RETURN_TOKEN(INNER_PRODUCT);

@@ -159,6 +159,7 @@ bool is_valid_date(const char *date) {
         NOT_NULL_T
 				ORDER_BY
 				ASC
+        AS
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -410,6 +411,17 @@ create_table_stmt:    /*create table 语句的语法解析树*/
         create_table.storage_format = $8;
         free($8);
       }
+      create_table.has_subquery = false;
+      create_table.subquery = nullptr;
+    }
+    | CREATE TABLE ID AS select_stmt
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
+      CreateTableSqlNode &create_table = $$->create_table;
+      create_table.relation_name = $3;
+      free($3);
+      create_table.has_subquery = true;
+      create_table.subquery = $5;
     }
     ;
 attr_def_list:

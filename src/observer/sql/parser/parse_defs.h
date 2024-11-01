@@ -201,6 +201,8 @@ struct CreateTableSqlNode
   std::string                  relation_name;   ///< Relation name
   std::vector<AttrInfoSqlNode> attr_infos;      ///< attributes
   std::string                  storage_format;  ///< storage format
+  bool has_subquery;                            ///< 是否有select子查询
+  ParsedSqlNode *subquery;                      ///< select子查询
 };
 
 /**
