@@ -69,6 +69,7 @@
 #line 2 "yacc_sql.y"
 
 
+#include <cstdint>
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
@@ -82,6 +83,7 @@
 #include "sql/parser/yacc_sql.hpp"
 #include "sql/parser/lex_sql.h"
 #include "sql/expr/expression.h"
+#include "common/type/attr_type.h"
 
 using namespace std;
 

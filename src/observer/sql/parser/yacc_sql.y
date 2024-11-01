@@ -1,6 +1,7 @@
 
 %{
 
+#include <cstdint>
 #include <stdio.h>
 #include <time.h>
 #include <string.h>
@@ -14,6 +15,7 @@
 #include "sql/parser/yacc_sql.hpp"
 #include "sql/parser/lex_sql.h"
 #include "sql/expr/expression.h"
+#include "common/type/attr_type.h"
 
 using namespace std;
 
@@ -109,6 +111,7 @@ bool is_valid_date(const char *date) {
         FLOAT_T
         VECTOR_T
         DATE_T
+        TEXT_T
         HELP
         EXIT
         DOT //QUOTE
@@ -445,6 +448,8 @@ attr_def:
     $$->length = 8;
     } else if ((AttrType)$2 == AttrType::CHARS) {
     $$->length = 32;
+      } else if ((AttrType)$2 == AttrType::TEXTS) {
+        $$->length = LOB_OVERFLOW_THRESHOLD;
     } else {
     $$->length = 4;
     }
@@ -468,6 +473,7 @@ type:
     | FLOAT_T  { $$ = static_cast<int>(AttrType::FLOATS); }
     | VECTOR_T { $$ = static_cast<int>(AttrType::VECTORS); }
     | DATE_T   { $$ = static_cast<int>(AttrType::DATES); }
+    | TEXT_T   { $$ = static_cast<int>(AttrType::TEXTS); }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
     INSERT INTO ID VALUES LBRACE value value_list RBRACE 

@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include "net/plain_communicator.h"
 #include "common/io/io.h"
 #include "common/log/log.h"
+#include "common/rc.h"
 #include "event/session_event.h"
 #include "net/buffered_writer.h"
 #include "session/session.h"
@@ -182,7 +183,9 @@ RC PlainCommunicator::write_result(SessionEvent *event, bool &need_disconnect)
       return rc;
     }
   }
-  writer_->flush();  // TODO handle error
+  if(OB_SUCC(rc)){
+    writer_->flush();  // TODO handle error
+  }
   return rc;
 }
 

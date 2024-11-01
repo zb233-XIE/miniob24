@@ -17,6 +17,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/bitmap.h"
 #include "common/lang/sstream.h"
 #include "storage/buffer/disk_buffer_pool.h"
+#include "storage/buffer/frame.h"
+#include "storage/buffer/page.h"
 #include "storage/common/chunk.h"
 #include "storage/record/record.h"
 #include "storage/record/record_log.h"
@@ -65,6 +67,7 @@ class Table;
  */
 struct PageHeader
 {
+  int32_t storage_format;    ///< 决定使用PageHeader还是LargePageHeader
   int32_t record_num;        ///< 当前页面记录的个数
   int32_t column_num;        ///< 当前页面记录所包含的列数
   int32_t record_real_size;  ///< 每条记录的实际大小
@@ -75,6 +78,27 @@ struct PageHeader
 
   string to_string() const;
 };
+
+/**
+ * @brief 大对象溢出页，溢出页分为两类：first_page与data_page
+ * first_page:
+ *   在record中，若大对象溢出，则在最后记录某一first_page的PageNum
+ *   若溢出的内容需要多个page存放，使用index_entry记录data_page的页号
+ * data_page:
+ *   仅存放数据，由first_page引用
+ */
+struct LargeObjPageHeader
+{
+  int32_t storage_format;
+  int16_t is_first_page;  ///< 是否是first page
+  int32_t index_entry[10];  ///< 仅对于first_page有效，记录data_page的页号，按索引顺序读取，第一个指向自己
+  int32_t obj_tot_size;   ///< 大对象的总大小
+  int32_t page_data_len;  ///< 本页中的数据大小
+
+  string to_string() const;
+};
+static constexpr const int LOB_PAGE_HEADER_SIZE = sizeof(LargeObjPageHeader);
+static constexpr const int LOB_PAGE_DATA_SIZE   = (BP_PAGE_DATA_SIZE - LOB_PAGE_HEADER_SIZE);
 
 /**
  * @brief 遍历一个页面中每条记录的iterator
@@ -224,6 +248,11 @@ public:
   PageNum get_page_num() const;
 
   /**
+   * @brief 返回该记录页是大对象的溢出页还是存放Record的正常页
+   */
+  bool is_lob_page() const;
+
+  /**
    * @brief 当前页面是否已经没有空闲位置插入新的记录
    */
   bool is_full() const;
@@ -260,6 +289,7 @@ protected:
   Frame *frame_ = nullptr;  ///< 当前操作页面关联的frame(frame的更多概念可以参考buffer pool和frame)
   ReadWriteMode rw_mode_     = ReadWriteMode::READ_WRITE;  ///< 当前的操作是否都是只读的
   PageHeader   *page_header_ = nullptr;                    ///< 当前页面上页面头
+  LargeObjPageHeader *lob_page_header_ = nullptr;
   char         *bitmap_      = nullptr;  ///< 当前页面上record分配状态信息bitmap内存起始位置
   StorageFormat storage_format_;
 
@@ -349,6 +379,40 @@ private:
   // get the field length by `column id`, all columns are fixed length.
   int get_field_len(int col_id);
 };
+
+/**
+ * @brief 负责处理大对象类型溢出页面的操作
+ * @ingroup RecordManager
+ * @details 存储格式具体如下
+ * @code
+ * | LOB_FIRST_PAGE/LOG_DATA_PAGE | data |
+ */
+class LargeObjPageHandler : public RecordPageHandler
+{
+public:
+  LargeObjPageHandler() : RecordPageHandler(StorageFormat::LOB_FORMAT) {}
+
+  RC init_empty_page(DiskBufferPool &buffer_pool, LogHandler &log_handler, PageNum page_num);
+
+  RC insert_lob(const char *data, size_t len);
+
+  RC init_first_page(vector<PageNum> &entries, int data_len);
+
+  int get_lob_tot_size();
+
+  int get_lob_page_size();
+
+  const char *data() { return frame_->data() + LOB_PAGE_HEADER_SIZE; }
+
+  RC get_entry(vector<PageNum> &entries);
+
+  // RC delete_lob(const RID *rid);
+
+  // RC update_lob(const RID &rid, const char *data);
+
+  // RC get_record(const RID &rid, Record &record);
+};
+
 /**
  * @brief 管理整个文件中记录的增删改查
  * @ingroup RecordManager
@@ -387,6 +451,13 @@ public:
    * @param rid         返回该记录的标识符
    */
   RC insert_record(const char *data, int record_size, RID *rid);
+
+  /**
+   * @brief 插入一个可能溢出的含大对象的新记录到指定文件中，返回记录标识符
+   * @param data            记录内容，可能被修改
+   * @param record_lob_anno 记录每个field是否为大对象或是否溢出的记录
+   */
+  RC insert_record(char *data, int record_size, const Field_LOB_ANNO *record_lob_anno, RID *rid);
 
   RC update_record(const char *data, const RID *rid);
 
@@ -465,6 +536,19 @@ private:
    * @brief 获取一个页面内的下一条记录
    */
   RC fetch_next_record_in_page();
+
+  /**
+   * @brief 对于含有大对象字段的table，扩充record成为完整的字段
+   */
+  RC expand_lob_fields();
+
+  /**
+   * @brief 给定某一大对象字段的所有页，将数据拷贝到data
+   * @param[in] offset: 由record内数据带来的偏移
+   * @param[in] copy_len 总拷贝长度，debug用
+   * @param[out] data
+   */
+  RC expand_field(vector<PageNum> &entries, char *data, int offset, int copy_len);
 
 private:
   // TODO 对于一个纯粹的record遍历器来说，不应该关心表和事务

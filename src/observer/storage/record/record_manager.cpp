@@ -12,10 +12,21 @@ See the Mulan PSL v2 for more details. */
 // Created by Meiyi & Longda on 2021/4/13.
 //
 #include "storage/record/record_manager.h"
+#include "common/init.h"
 #include "common/log/log.h"
+#include "common/rc.h"
+#include "common/type/attr_type.h"
+#include "common/types.h"
+#include "storage/buffer/frame.h"
+#include "storage/buffer/page.h"
 #include "storage/common/condition_filter.h"
+#include "storage/record/record.h"
+#include "storage/table/table.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/log_handler.h"
+#include <cstddef>
+#include <cstring>
+#include <memory>
 #include <cstring>
 #include <memory>
 
@@ -66,6 +77,22 @@ string PageHeader::to_string() const
   stringstream ss;
   ss << "record_num:" << record_num << ",column_num:" << column_num << ",record_real_size:" << record_real_size
      << ",record_size:" << record_size << ",record_capacity:" << record_capacity << ",data_offset:" << data_offset;
+  return ss.str();
+}
+
+string LargeObjPageHeader::to_string() const
+{
+  stringstream ss;
+  ss << "is_first_page: " << static_cast<bool>(is_first_page) << ", object_total_size: " << obj_tot_size
+     << ", page_data_len" << page_data_len;
+  if (is_first_page) {
+    ss << "[";
+    for (int i = 0; i < 10 && index_entry[i] != BP_INVALID_PAGE_NUM; i++) {
+      if (i)
+        ss << ", ";
+      ss << index_entry[i];
+    }
+  }
   return ss.str();
 }
 
@@ -125,9 +152,19 @@ RC RecordPageHandler::init(DiskBufferPool &buffer_pool, LogHandler &log_handler,
 
   rw_mode_     = mode;
   page_header_ = (PageHeader *)(data);
-  bitmap_      = data + PAGE_HEADER_SIZE;
 
-  (void)log_handler_.init(log_handler, buffer_pool.id(), page_header_->record_real_size, storage_format_);
+  int record_size = page_header_->record_real_size;
+  // ASSERT(page_header_->storage_format == static_cast<int32_t>(storage_format_), "Wrong interpretation of page
+  // header");
+  if (storage_format_ == StorageFormat::LOB_FORMAT) {
+    page_header_     = nullptr;
+    lob_page_header_ = (LargeObjPageHeader *)(data);
+    record_size      = LOB_MAX_SIZE;
+  } else {
+    bitmap_ = data + PAGE_HEADER_SIZE;
+  }
+
+  (void)log_handler_.init(log_handler, buffer_pool.id(), record_size, storage_format_);
 
   LOG_TRACE("Successfully init page_num %d.", page_num);
   return ret;
@@ -176,6 +213,7 @@ RC RecordPageHandler::init_empty_page(
   if (table_meta != nullptr && storage_format_ == StorageFormat::PAX_FORMAT) {
     column_num = table_meta->field_num();
   }
+  page_header_->storage_format   = static_cast<int32_t>(storage_format_);
   page_header_->record_num       = 0;
   page_header_->column_num       = column_num;
   page_header_->record_real_size = record_size;
@@ -414,7 +452,21 @@ PageNum RecordPageHandler::get_page_num() const
   return frame_->page_num();
 }
 
-bool RecordPageHandler::is_full() const { return page_header_->record_num >= page_header_->record_capacity; }
+bool RecordPageHandler::is_lob_page() const
+{
+  ASSERT(page_header_ != nullptr, "");
+  return page_header_->storage_format == static_cast<int32_t>(StorageFormat::LOB_FORMAT);
+}
+
+bool RecordPageHandler::is_full() const
+{
+  if (page_header_ == nullptr)
+    return true;
+  if (page_header_ != nullptr && page_header_->storage_format == static_cast<int32_t>(StorageFormat::LOB_FORMAT)) {
+    return true;
+  }
+  return page_header_->record_num >= page_header_->record_capacity;
+}
 
 RC PaxRecordPageHandler::insert_record(const char *data, RID *rid)
 {
@@ -549,6 +601,98 @@ int PaxRecordPageHandler::get_field_len(int col_id)
 
 ////////////////////////////////////////////////////////////////////////////////
 
+RC LargeObjPageHandler::init_empty_page(DiskBufferPool &buffer_pool, LogHandler &log_handler, PageNum page_num)
+{
+  RC rc = init(buffer_pool, log_handler, page_num, ReadWriteMode::READ_WRITE);
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("Failed to init empty page page_num: %d for LOB store. rc=%s", page_num, strrc(rc));
+    return rc;
+  }
+
+  (void)log_handler_.init(log_handler, buffer_pool.id(), LOB_MAX_SIZE, storage_format_);
+  ASSERT(page_header_ == nullptr && lob_page_header_ != nullptr, "mismatch header for page");
+  ASSERT(storage_format_ == StorageFormat::LOB_FORMAT, "mismatch storage format & page header");
+
+  lob_page_header_->storage_format = static_cast<int32_t>(StorageFormat::LOB_FORMAT);
+  lob_page_header_->is_first_page  = 0;
+  lob_page_header_->obj_tot_size   = 0;
+  lob_page_header_->page_data_len  = 0;
+  for (int i = 0; i < 10; i++) {
+    lob_page_header_->index_entry[i] = BP_INVALID_PAGE_NUM;
+  }
+
+  rc = log_handler_.init_new_page(frame_, page_num, span<const char>());
+  if (OB_FAIL(rc)) {
+    LOG_ERROR("Failed to init empty page for LOB store: write log failed. page_num: %d. rc=%s", 
+              page_num, strrc(rc));
+    return rc;
+  }
+
+  return RC::SUCCESS;
+}
+
+RC LargeObjPageHandler::insert_lob(const char *data, size_t len)
+{
+  ASSERT(rw_mode_ != ReadWriteMode::READ_ONLY, 
+         "cannot insert record into page while the page is readonly");
+  ASSERT(data != nullptr, "empty large object data to insert");
+  ASSERT(len <= LOB_PAGE_DATA_SIZE, "invalid large object data len");
+  // FIX: do not consider log handler
+  lob_page_header_->page_data_len = len;
+  memcpy(frame_->data() + LOB_PAGE_HEADER_SIZE, data, len);
+
+  frame_->mark_dirty();
+
+  return RC::SUCCESS;
+}
+
+RC LargeObjPageHandler::init_first_page(vector<PageNum> &entries, int data_len)
+{
+  ASSERT(lob_page_header_ != nullptr, "");
+  ASSERT(entries.size() <= 10, "LOB too much overflow data");
+
+  int len = entries.size();
+  for (int i = 0; i < len; i++) {
+    lob_page_header_->index_entry[i] = entries[i];
+  }
+  lob_page_header_->is_first_page = 1;
+  lob_page_header_->obj_tot_size  = data_len;
+
+  return RC::SUCCESS;
+}
+
+int LargeObjPageHandler::get_lob_tot_size()
+{
+  ASSERT(lob_page_header_ != nullptr, "");
+  ASSERT(lob_page_header_->is_first_page == 1, "");
+
+  return lob_page_header_->obj_tot_size;
+}
+
+int LargeObjPageHandler::get_lob_page_size()
+{
+  ASSERT(lob_page_header_ != nullptr, "");
+
+  return lob_page_header_->page_data_len;
+}
+
+RC LargeObjPageHandler::get_entry(vector<PageNum> &entries)
+{
+  ASSERT(lob_page_header_ != nullptr, "");
+  ASSERT(lob_page_header_->is_first_page == 1, "");
+
+  int index = 0;
+  while (lob_page_header_->index_entry[index] != BP_INVALID_PAGE_NUM) {
+    index++;
+  }
+  PageNum *st = lob_page_header_->index_entry;
+  entries.assign(st, st + index);
+
+  return RC::SUCCESS;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 RecordFileHandler::~RecordFileHandler() { this->close(); }
 
 RC RecordFileHandler::init(DiskBufferPool &buffer_pool, LogHandler &log_handler, TableMeta *table_meta)
@@ -675,6 +819,60 @@ RC RecordFileHandler::insert_record(const char *data, int record_size, RID *rid)
   return record_page_handler->insert_record(data, rid);
 }
 
+RC RecordFileHandler::insert_record(char *data, int record_size, const Field_LOB_ANNO *record_lob_anno, RID *rid)
+{
+  RC                              ret      = RC::SUCCESS;
+  PageNum                         page_num = BP_INVALID_PAGE_NUM;
+  unique_ptr<LargeObjPageHandler> lob_page_handler(new LargeObjPageHandler());
+
+  int normal_field_start_index = table_meta_->sys_field_num();
+  int normal_field_count       = table_meta_->field_num() - normal_field_start_index;
+  int field_tail_offset        = 0;
+
+  vector<PageNum> index_entry;
+  for (int i = 0; i < normal_field_count; i++) {
+    const auto &field_anno = *(record_lob_anno + i);
+    const auto *field      = table_meta_->field(i + normal_field_start_index);
+    field_tail_offset += field->len();
+    if (field_anno.is_lob_field() && field_anno.overflow()) {
+      int overflow_pgcnt = (field_anno.data_len() / LOB_PAGE_DATA_SIZE) + 1;
+      ASSERT(overflow_pgcnt > 0, "large object spill empty data");
+
+      const char *overflow_data = field_anno.data();
+      int         data_len      = field_anno.data_len();
+      int         copy_offset   = 0;
+      int         copy_len      = 0;
+      Frame      *frame         = nullptr;
+      for (int j = 0; j < overflow_pgcnt; j++) {
+        if ((ret = disk_buffer_pool_->allocate_page(&frame)) != RC::SUCCESS) {
+          LOG_ERROR("Failed to allocate page for LOB field. ret:%d", ret);
+          return ret;
+        }
+        page_num = frame->page_num();
+        index_entry.push_back(page_num);
+
+        lob_page_handler->init_empty_page(*disk_buffer_pool_, *log_handler_, page_num);
+
+        copy_len = std::min(LOB_PAGE_DATA_SIZE, data_len - copy_offset);
+        lob_page_handler->insert_lob(overflow_data + copy_offset, copy_len);
+        copy_offset += copy_len;
+      }
+
+      PageNum first_page = index_entry[0];
+      LOG_DEBUG("record field <%s> spill to page: %d", field->name(), first_page);
+
+      lob_page_handler->init(*disk_buffer_pool_, *log_handler_, first_page, ReadWriteMode::READ_WRITE);
+      lob_page_handler->init_first_page(index_entry, data_len);
+      // set first page into record content
+      // LOB field : | ---- data ---- | PageNum:4B |
+      memcpy(data + field_tail_offset - sizeof(PageNum), &index_entry[0], sizeof(PageNum));
+    }
+    lob_page_handler->cleanup();
+  }
+
+  return insert_record(data, record_size, rid);
+}
+
 RC RecordFileHandler::recover_insert_record(const char *data, int record_size, const RID &rid)
 {
   RC ret = RC::SUCCESS;
@@ -718,7 +916,8 @@ RC RecordFileHandler::delete_record(const RID *rid)
   return rc;
 }
 
-RC RecordFileHandler::update_record(const char *data, const RID *rid) {
+RC RecordFileHandler::update_record(const char *data, const RID *rid)
+{
   RC rc = RC::SUCCESS;
 
   unique_ptr<RecordPageHandler> record_page_handler(RecordPageHandler::create(storage_format_));
@@ -834,6 +1033,9 @@ RC RecordFileScanner::fetch_next_record()
       // 有有效记录：RC::SUCCESS
       // 或者出现了错误，rc != (RC::SUCCESS or RC::RECORD_EOF)
       // RECORD_EOF 表示当前页面已经遍历完了
+      if (rc == RC::SUCCESS) {
+        rc = expand_lob_fields();
+      }
       return rc;
     }
   }
@@ -847,13 +1049,19 @@ RC RecordFileScanner::fetch_next_record()
       LOG_WARN("failed to init record page handler. page_num=%d, rc=%s", page_num, strrc(rc));
       return rc;
     }
-
+    if (record_page_handler_->is_lob_page()) {
+      // 跳过存储了大对象的数据页
+      continue;
+    }
     record_page_iterator_.init(record_page_handler_);
     rc = fetch_next_record_in_page();
     if (rc == RC::SUCCESS || rc != RC::RECORD_EOF) {
       // 有有效记录：RC::SUCCESS
       // 或者出现了错误，rc != (RC::SUCCESS or RC::RECORD_EOF)
       // RECORD_EOF 表示当前页面已经遍历完了
+      if (rc == RC::SUCCESS) {
+        rc = expand_lob_fields();
+      }
       return rc;
     }
   }
@@ -870,6 +1078,7 @@ RC RecordFileScanner::fetch_next_record()
 RC RecordFileScanner::fetch_next_record_in_page()
 {
   RC rc = RC::SUCCESS;
+  next_record_.~Record();
   while (record_page_iterator_.has_next()) {
     rc = record_page_iterator_.next(next_record_);
     if (rc != RC::SUCCESS) {
@@ -901,6 +1110,87 @@ RC RecordFileScanner::fetch_next_record_in_page()
 
   next_record_.rid().slot_num = -1;
   return RC::RECORD_EOF;
+}
+
+/**
+ * @brief 对于含有大对象字段的next_record_，进行扩充
+ */
+RC RecordFileScanner::expand_lob_fields()
+{
+  RC rc = RC::SUCCESS;
+  if (table_->table_meta().contain_lob_field()) {
+    const char *data = next_record_.data();
+
+    const auto &table_meta               = table_->table_meta();
+    int         normal_field_start_index = table_meta.sys_field_num();
+    int         normal_field_count       = table_meta.field_num() - normal_field_start_index;
+
+    unique_ptr<LargeObjPageHandler> lob_page_handler(new LargeObjPageHandler());
+
+    // align length of every large object to TEXT_MAX_SIZE
+    // form new record
+    int current_offset       = 0;
+    int output_record_offset = 0;
+    next_record_.new_record(table_meta.output_record_size());
+    char *output_data = next_record_.data();
+
+    for (int i = 0; i < normal_field_count; i++) {
+      const auto *field     = table_meta.field(i + normal_field_start_index);
+      const auto *out_field = table_meta.out_field(i + normal_field_start_index);
+      ASSERT(current_offset == field->offset(), "");
+
+      int copy_len = field->len();
+      memcpy(output_data + output_record_offset, data + current_offset, copy_len);
+      if(field->type() == AttrType::TEXTS){
+        // check the last four bytes
+        const char *lob_field_data = data + current_offset + field->len() - sizeof(PageNum);
+        PageNum     overflow_page  = *reinterpret_cast<const PageNum *>(lob_field_data);
+
+        size_t in_field_len = strnlen(data + field->offset(), LOB_OVERFLOW_THRESHOLD - sizeof(PageNum));
+        size_t overflow_len = 0;
+
+        // get meta data from overflow first_page
+        vector<PageNum> entries;
+        if (overflow_page != BP_INVALID_PAGE_NUM) {
+          lob_page_handler->init(*disk_buffer_pool_, *log_handler_, overflow_page, rw_mode_);
+          overflow_len = lob_page_handler->get_lob_tot_size();
+          rc           = lob_page_handler->get_entry(entries);
+          if (OB_FAIL(rc)) {
+            return rc;
+          }
+        }
+        rc = expand_field(entries, output_data + output_record_offset, in_field_len, overflow_len);
+        
+        if (OB_FAIL(rc)) {
+          return rc;
+        }
+      }
+      output_record_offset += out_field->len();
+      current_offset += field->len();
+    }
+    LOG_DEBUG("%d : %d", output_record_offset, table_meta.output_record_size());
+    ASSERT(output_record_offset == table_meta.output_record_size(), "");
+  }
+  return rc;
+}
+
+RC RecordFileScanner::expand_field(vector<PageNum> &entries, char *data, int offset, int copy_len)
+{
+  RC                              rc = RC::SUCCESS;
+  unique_ptr<LargeObjPageHandler> lob_page_handler(new LargeObjPageHandler());
+  for (auto page_num : entries) {
+    rc = lob_page_handler->init(*disk_buffer_pool_, *log_handler_, page_num, rw_mode_);
+    if (OB_FAIL(rc)) {
+      return rc;
+    }
+    const char *src           = lob_page_handler->data();
+    int         page_data_len = lob_page_handler->get_lob_page_size();
+    memcpy(data + offset, src, page_data_len);
+    // ASSERT(offset + page_data_len <= copy_len, "");
+    offset += page_data_len;
+  }
+  *(char *)(data + offset + copy_len) = '\0'; // just an insurance
+  return rc;
 }
 
 RC RecordFileScanner::close_scan()

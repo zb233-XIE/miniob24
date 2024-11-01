@@ -32,7 +32,18 @@ RC InsertPhysicalOperator::open(Trx *trx)
     return rc;
   }
 
-  rc = trx->insert_record(table_, record);
+  Record_LOB_ANNO record_lob_anno;
+  if(table_->table_meta().contain_lob_field()){
+    rc = table_->make_record_lob_anno(static_cast<int>(values_.size()), values_.data(), record_lob_anno);
+    if(rc != RC::SUCCESS){
+      LOG_WARN("failed to make record LOB annotations. rc=%s", strrc(rc));
+      return rc;
+    }
+    rc = trx->insert_record(table_, record, record_lob_anno.data());
+  } else {
+    rc = trx->insert_record(table_, record);
+  }
+
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to insert record by transaction. rc=%s", strrc(rc));
   }

@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include "storage/record/record.h"
 #include "storage/table/table_meta.h"
 #include "common/types.h"
 #include "common/lang/span.h"
@@ -72,12 +73,15 @@ public:
    */
   RC make_record(int value_num, const Value *values, Record &record);
 
+  RC make_record_lob_anno(int value_num, const Value *values, Record_LOB_ANNO& record_lob_anno);
+
   /**
    * @brief 在当前的表中插入一条记录
    * @details 在表文件和索引中插入关联数据。这里只管在表中插入数据，不关心事务相关操作。
    * @param record[in/out] 传入的数据包含具体的数据，插入成功会通过此字段返回RID
    */
   RC insert_record(Record &record);
+  RC insert_record(Record &record, const Field_LOB_ANNO* record_lob_anno);
   RC delete_record(const Record &record);
   RC delete_record(const RID &rid);
   RC update_record(const Record &record, char *update_data);
@@ -130,6 +134,7 @@ private:
   Db                *db_ = nullptr;
   string             base_dir_;
   TableMeta          table_meta_;
+  TableMeta          output_table_meta_;           /// 解决含有大对象字段导致的存入与输出大小不对称的问题
   DiskBufferPool    *data_buffer_pool_ = nullptr;  /// 数据文件关联的buffer pool
   RecordFileHandler *record_handler_   = nullptr;  /// 记录操作
   vector<Index *>    indexes_;

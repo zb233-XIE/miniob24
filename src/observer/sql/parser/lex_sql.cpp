@@ -1576,6 +1576,7 @@ YY_RULE_SETUP
 RETURN_TOKEN(LBRACE);
 	YY_BREAK
 case 71:
+/* rule 71 can match eol */
 YY_RULE_SETUP
 #line 162 "lex_sql.l"
 last_flag=1; RETURN_TOKEN(RBRACE);
