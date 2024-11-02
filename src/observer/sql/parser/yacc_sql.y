@@ -53,16 +53,6 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   return expr;
 }
 
-// UnboundSubqueryExpr *create_subquery_expression(ParsedSqlNode *sub_sqlnode,
-//                                                 std::vector<Value> *values,
-//                                                 const char *sql_string,
-//                                                 YYLTYPE *llocp)
-// {
-//   UnboundSubqueryExpr *expr = new UnboundSubqueryExpr(sub_sqlnode, values);
-//   expr->set_name(token_name(sql_string, llocp));
-//   return expr;
-// }
-
 bool is_valid_date(const char *date) {
   struct tm tm; bzero(&tm, sizeof(tm));
   char *result = strptime(date, "%Y-%m-%d", &tm);
@@ -957,56 +947,6 @@ where:
     | WHERE condition_list {
       $$ = $2;  
     }
-    /* | WHERE subquery {
-      $$ = new std::vector<ConditionSqlNode>;
-      $$->emplace_back(*$2);
-      delete $2;
-    } */
-    ;
-
-/* subquery:
-    expression IN_T LBRACE select_stmt RBRACE
-    {
-      $$ = new ConditionSqlNode;
-      $$->is_subquery = 1;
-      $$->comp = CompOp::IN;
-      $$->expr = $1;
-      $$->sub_sqlnode = $4;
-    }
-    | expression NOT IN_T LBRACE select_stmt RBRACE {
-      $$ = new ConditionSqlNode;
-      $$->is_subquery = 1;
-      $$->comp = CompOp::NOT_IN;
-      $$->expr = $1;
-      $$->sub_sqlnode = $5;
-    }
-    | EXISTS_T LBRACE select_stmt RBRACE {
-      $$ = new ConditionSqlNode;
-      $$->is_subquery = 1;
-      $$->comp = CompOp::EXISTS;
-      $$->sub_sqlnode = $3;
-    }
-    | NOT EXISTS_T LBRACE select_stmt RBRACE {
-      $$ = new ConditionSqlNode;
-      $$->is_subquery = 1;
-      $$->comp = CompOp::NOT_EXISTS;
-      $$->sub_sqlnode = $4;
-    }
-    | expression comp_op LBRACE select_stmt RBRACE {
-      $$ = new ConditionSqlNode;
-      $$->is_subquery = 1;
-      $$->comp = $2;
-      $$->expr = $1;
-      $$->sub_sqlnode = $4;
-    }
-    | LBRACE select_stmt RBRACE comp_op expression {
-      $$ = new ConditionSqlNode;
-      $$->is_subquery = 1;
-      $$->comp = $4;
-      $$->expr = $5;
-      $$->sub_sqlnode = $2;
-    }
-    ; */
 
 condition_list:
     /* empty */
@@ -1192,10 +1132,6 @@ comp_op:
     | NLK {$$ = NOT_LIKE; }
     | IS_T { $$ = IS; }
     | IS_NOT_T { $$ = IS_NOT; }
-    /* | IN_T { $$ = IN; }
-    | NOT IN_T { $$ = NOT_IN; } */
-    /* | EXISTS_T { $$ = EXISTS; }
-    | NOT EXISTS_T { $$ = NOT_EXISTS; } */
     ;
 
 // your code here

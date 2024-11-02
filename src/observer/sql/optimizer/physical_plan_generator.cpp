@@ -48,8 +48,6 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/table_scan_vec_physical_operator.h"
 #include "sql/operator/update_physical_operator.h"
 #include "sql/optimizer/physical_plan_generator.h"
-#include "sql/operator/subquery_logical_operator.h"
-#include "sql/operator/subquery_physical_operator.h"
 #include "sql/operator/dumb_logical_operator.h"
 #include "sql/operator/dumb_physical_operator.h"
 #include "sql/parser/parse_defs.h"
@@ -102,13 +100,10 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
       return create_plan(static_cast<GroupByLogicalOperator &>(logical_operator), oper);
     } break;
 
-    case LogicalOperatorType::SUBQUERY: {
-      return create_plan(static_cast<SubqueryLogicalOperator &>(logical_operator), oper);
-    }
-
     case LogicalOperatorType::DUMB: {
       return create_plan(static_cast<DumbLogicalOperator &>(logical_operator), oper);
     }
+
     case LogicalOperatorType::ORDER_BY: {
       return create_plan(static_cast<OrderByLogicalOperator &>(logical_operator), oper);
     } break;
@@ -462,39 +457,6 @@ RC PhysicalPlanGenerator::create_plan(GroupByLogicalOperator &logical_oper, std:
   group_by_oper->add_child(std::move(child_physical_oper));
 
   oper = std::move(group_by_oper);
-  return rc;
-}
-
-RC PhysicalPlanGenerator::create_plan(SubqueryLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
-{
-  RC rc = RC::SUCCESS;
-  vector<unique_ptr<LogicalOperator>> &child_opers = logical_oper.children();
-  std::vector<Value> values = logical_oper.get_values();
-  if (child_opers.size() != 2 && values.empty()) {
-    LOG_WARN("subquery operator should have 2 children, but have %d", child_opers.size());
-    return RC::INTERNAL;
-  }
-
-  unique_ptr<Expression> &expr = logical_oper.expr();
-  CompOp comp = logical_oper.comp();
-  int left_is_expr = logical_oper.left_is_expr();
-  auto subquery_operator = make_unique<SubqueryPhysicalOperator>(std::move(expr), comp, left_is_expr);
-  for (auto &child_oper : child_opers) {
-    unique_ptr<PhysicalOperator> child_physical_oper;
-    rc = create(*child_oper, child_physical_oper);
-    if (rc != RC::SUCCESS) {
-      LOG_WARN("failed to create physical child oper. rc=%s", strrc(rc));
-      return rc;
-    }
-
-    subquery_operator->add_child(std::move(child_physical_oper));
-  }
-
-  subquery_operator->set_values(values);
-
-  oper = std::move(subquery_operator);
-
-  LOG_TRACE("create a subquery physical operator");
   return rc;
 }
 

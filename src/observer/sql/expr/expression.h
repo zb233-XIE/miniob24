@@ -484,37 +484,6 @@ private:
   std::unique_ptr<Expression> child_;
 };
 
-class SubqueryExpr : public Expression
-{
-public:
-  SubqueryExpr(int left_is_expr, CompOp comp, std::vector<Value> &values, Expression *expr,
-      unique_ptr<LogicalOperator> &logical_oper);
-
-  ExprType type() const override { return ExprType::SUBQUERY; }
-
-  AttrType value_type() const override { return AttrType::BOOLEANS; }
-  RC get_value(const Tuple &tuple, Value &value) const override;
-
-  unique_ptr<LogicalOperator> &get_logical_operator() { return logical_oper_; }
-
-  void set_trx(Trx *trx) { trx_ = trx; }
-  
-  void set_physical_operator(unique_ptr<PhysicalOperator> &phy_oper);
-
-
-  void update_state(Value &v1, Value &v2);
-
-
-private:
-  int left_is_expr_;
-  CompOp comp_;
-  std::unique_ptr<Expression> expr_;
-  std::vector<Value> values_;
-  unique_ptr<LogicalOperator> logical_oper_;
-  unique_ptr<PhysicalOperator> physical_oper_;
-  Trx *trx_;
-};
-
 class UnboundSubqueryExpr : public Expression
 {
 public:
@@ -551,9 +520,6 @@ public:
   void set_physical_operator(unique_ptr<PhysicalOperator> &phy_oper);
   unique_ptr<LogicalOperator> &get_logical_operator() { return logical_oper_; }
   void set_trx(Trx *trx) { trx_ = trx; }
-
-  RC open();
-  RC close();
 
 private:
   Stmt *stmt_;

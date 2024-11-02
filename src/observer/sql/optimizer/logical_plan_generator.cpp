@@ -28,7 +28,6 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/group_by_logical_operator.h"
 #include "sql/operator/order_by_logical_operator.h"
-#include "sql/operator/subquery_logical_operator.h"
 
 #include "sql/parser/parse_defs.h"
 #include "sql/operator/update_logical_operator.h"
@@ -186,21 +185,6 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     last_oper = &group_by_oper;
   }
 
-  // 插入SubqueryLogiclOperator
-  // unique_ptr<LogicalOperator> subquery_oper;
-  // rc = create_plan(select_stmt->subquery_stmt(), subquery_oper);
-  // if (OB_FAIL(rc)) {
-  //   LOG_WARN("failed to create subquery logical plan. rc=%s", strrc(rc));
-  //   return rc;
-  // }
-
-  // if (subquery_oper) {
-  //   if (*last_oper) {
-  //     subquery_oper->add_child(std::move(*last_oper));
-  //   }
-
-  //   last_oper = &subquery_oper;
-  // }
   // 子查询的predicate_oper2
   unique_ptr<LogicalOperator> predicate_oper2;
 
@@ -553,23 +537,3 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
   logical_operator = std::move(group_by_oper);
   return RC::SUCCESS;
 }
-
-// RC LogicalPlanGenerator::create_plan(SubqueryStmt *stmt, unique_ptr<LogicalOperator> &logical_operator)
-// {
-//   if (stmt == nullptr) {
-//     return RC::SUCCESS;
-//   }
-
-//   auto subquery_oper = make_unique<SubqueryLogicalOperator>(std::unique_ptr<Expression>(stmt->expr()), stmt->comp(), stmt->left_is_expr()); 
-  
-//   if (stmt->sub_stmt() != nullptr) {
-//     unique_ptr<LogicalOperator> sub_logical_operator;
-//     create(stmt->sub_stmt(), sub_logical_operator);
-//     subquery_oper->add_child(std::move(sub_logical_operator));
-//   } else {
-//     subquery_oper->set_values(stmt->values());
-//   }
-
-//   logical_operator = std::move(subquery_oper);
-//   return RC::SUCCESS;
-// }

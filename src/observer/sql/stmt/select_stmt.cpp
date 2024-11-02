@@ -111,26 +111,6 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     }
   }
 
-  // debug
-  // for (ConditionSqlNode &condition : select_sql.conditions) {
-  //   std::cout << condition.is_subquery << std::endl;
-  //   SelectSqlNode &sub_select_sql = condition.sub_sqlnode->selection;
-  //   for (ConditionSqlNode &sub_select_condition : sub_select_sql.conditions) {
-  //     std::cout << sub_select_condition.is_subquery << std::endl;
-  //     if (sub_select_condition.is_subquery) {
-  //       SelectSqlNode &sub_sub_select_sql = sub_select_condition.sub_sqlnode->selection;
-  //       for (ConditionSqlNode &sub_sub_select_condition : sub_sub_select_sql.conditions) {
-  //         std::cout << sub_sub_select_condition.is_subquery << std::endl;
-  //         std::cout << (int)sub_sub_select_condition.left_expr->type() << std::endl;
-  //         std::cout << (int)sub_sub_select_condition.right_expr->type() << std::endl;
-  //       }
-  //     } else {
-  //       std::cout << (int)sub_select_condition.left_expr->type() << std::endl;
-  //       std::cout << (int)sub_select_condition.right_expr->type() << std::endl;
-  //     }
-  //   }
-  // }
-
   // 6. 绑定select_sql.conditions中的表达式
   for (ConditionSqlNode &condition : select_sql.conditions) {
     RC rc = RC::SUCCESS;
@@ -164,12 +144,6 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       it++;
     }
   }
-
-  // debug
-  // std::cout << "after delete" << std::endl;
-  // for (ConditionSqlNode &condition : select_sql.conditions) {
-  //   std::cout << condition.is_subquery << std::endl;
-  // }
 
   // 9. 绑定select_sql.join_conditions中的表达式
   for (std::vector<ConditionSqlNode> *conditions : select_sql.join_conditions) {
