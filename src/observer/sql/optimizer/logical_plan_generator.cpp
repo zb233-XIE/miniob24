@@ -337,25 +337,34 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
 RC LogicalPlanGenerator::create_plan(SubqueryStmt *subquery_stmt, unique_ptr<LogicalOperator> &logical_operator)
 {
   RC rc = RC::SUCCESS;
-  if (subquery_stmt == nullptr) {
-    return rc;
-  }
 
   const std::vector<SubqueryUnit *> &subquery_units = subquery_stmt->subquery_units();
   std::vector<unique_ptr<Expression>> subquery_exprs;
   for (SubqueryUnit *subquery_unit : subquery_units) {
-    // stmt->logical plan
-    Stmt *sub_stmt = subquery_unit->stmt();
-    int left_is_expr = subquery_unit->left_is_expr();
-    CompOp comp = subquery_unit->comp();
-    std::vector<Value> values = subquery_unit->values();
-    Expression *expr = subquery_unit->expr();
-    unique_ptr<LogicalOperator> sub_logical_operator;
-    if (sub_stmt != nullptr) {
+    unique_ptr<Expression> left;
+    unique_ptr<Expression> right;
+    left = unique_ptr<Expression>(subquery_unit->left_expr());
+    right = unique_ptr<Expression>(subquery_unit->right_expr());
+
+    // 对于left和right中的stmt，递归地创建其logical plan
+    if (left->type() == ExprType::BOUND_SUBQUERY) {
+      auto row_left = static_cast<BoundSubqueryExpr *>(left.get());
+      Stmt *sub_stmt = row_left->stmt();
+      unique_ptr<LogicalOperator> sub_logical_operator;
       create(sub_stmt, sub_logical_operator);
+      row_left->set_logical_operator(sub_logical_operator);
     }
-    SubqueryExpr *subquery_expr = new SubqueryExpr(left_is_expr, comp, values, expr, sub_logical_operator);
-    subquery_exprs.emplace_back(subquery_expr);
+
+    if (right->type() == ExprType::BOUND_SUBQUERY) {
+      auto row_right = static_cast<BoundSubqueryExpr *>(right.get());
+      Stmt *sub_stmt = row_right->stmt();
+      unique_ptr<LogicalOperator> sub_logical_operator;
+      create(sub_stmt, sub_logical_operator);
+      row_right->set_logical_operator(sub_logical_operator);
+    }
+
+    ComparisonExpr *cmp_expr = new ComparisonExpr(subquery_unit->comp(), std::move(left), std::move(right));
+    subquery_exprs.emplace_back(cmp_expr);
   }
 
   unique_ptr<PredicateLogicalOperator> predicate_oper;

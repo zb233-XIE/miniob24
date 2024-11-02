@@ -53,6 +53,16 @@ UnboundAggregateExpr *create_aggregate_expression(const char *aggregate_name,
   return expr;
 }
 
+// UnboundSubqueryExpr *create_subquery_expression(ParsedSqlNode *sub_sqlnode,
+//                                                 std::vector<Value> *values,
+//                                                 const char *sql_string,
+//                                                 YYLTYPE *llocp)
+// {
+//   UnboundSubqueryExpr *expr = new UnboundSubqueryExpr(sub_sqlnode, values);
+//   expr->set_name(token_name(sql_string, llocp));
+//   return expr;
+// }
+
 bool is_valid_date(const char *date) {
   struct tm tm; bzero(&tm, sizeof(tm));
   char *result = strptime(date, "%Y-%m-%d", &tm);
@@ -827,6 +837,20 @@ expression:
     | SUM LBRACE agg_fun_attr_list RBRACE {
       $$ = create_aggregate_expression("sum", $3, sql_string, &@$);
     }
+    /* | LBRACE select_stmt RBRACE {
+      $$ = create_subquery_expression($2, nullptr, sql_string, &@$);
+    } */
+    /* | LBRACE value value_list RBRACE {
+      std::cout << "jijijijiji" << std::endl;
+      if ($3 != nullptr) {
+        $$ = create_subquery_expression(nullptr, $3, sql_string, &@$);
+      } else {
+        std::vector<Value> *values = new std::vector<Value>();
+        values->emplace_back(*$2);
+        $$ = create_subquery_expression(nullptr, values, sql_string, &@$);
+        delete $2;
+      }
+    } */
     ;
 agg_fun_attr_list:
     agg_fun_attr {
@@ -1058,75 +1082,102 @@ condition:
       $$->right_expr = $3;
       $$->comp = $2;
     }
-    | expression IN_T LBRACE select_stmt RBRACE
-    {
+    | expression comp_op LBRACE select_stmt RBRACE {
       $$ = new ConditionSqlNode;
+      $$->neither = 1;
       $$->is_subquery = 1;
+      $$->left_expr = $1;
+      UnboundSubqueryExpr *right_expr = new UnboundSubqueryExpr($4);
+      $$->right_expr = right_expr;
+      $$->comp = $2;
+    }
+    | expression IN_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      $$->left_expr = $1;
+      UnboundSubqueryExpr *right_expr = new UnboundSubqueryExpr($4);
+      $$->right_expr = right_expr;
       $$->comp = CompOp::IN;
-      $$->expr = $1;
-      $$->sub_sqlnode = $4;
     }
     | expression NOT IN_T LBRACE select_stmt RBRACE {
       $$ = new ConditionSqlNode;
+      $$->neither = 1;
       $$->is_subquery = 1;
+      $$->left_expr = $1;
+      UnboundSubqueryExpr *right_expr = new UnboundSubqueryExpr($5);
+      $$->right_expr = right_expr;
       $$->comp = CompOp::NOT_IN;
-      $$->expr = $1;
-      $$->sub_sqlnode = $5;
     }
-    | expression IN_T LBRACE value value_list RBRACE
-    {
+    /* expression 和 (xxx) 的算数比较没有意义，如果xxx是一个数字，则由前一条判定，如果xxx是多个数字，无法比较，直接报错即可 */
+    | expression IN_T LBRACE value value_list RBRACE{
       $$ = new ConditionSqlNode;
+      $$->neither = 1;
       $$->is_subquery = 1;
-      $$->comp = CompOp::IN;
-      $$->expr = $1;
+      $$->left_expr = $1;
+      std::vector<Value> *values;
       if ($5 != nullptr) {
-        $$->values.swap(*$5);
-        delete $5;
+        values = $5;
+      } else {
+        values = new std::vector<Value>();
       }
-      $$->values.emplace_back(*$4);
-      delete $4;
-      $$->sub_sqlnode = nullptr;
+      values->emplace_back(*$4);
+      ValueListExpr *right_expr = new ValueListExpr(values);
+      $$->right_expr = right_expr;
+      $$->comp = CompOp::IN;
     }
-    | expression NOT IN_T LBRACE value value_list RBRACE
-    {
+    | expression NOT IN_T LBRACE value value_list RBRACE{
       $$ = new ConditionSqlNode;
+      $$->neither = 1;
       $$->is_subquery = 1;
-      $$->comp = CompOp::NOT_IN;
-      $$->expr = $1;
+      $$->left_expr = $1;
+      std::vector<Value> *values;
       if ($6 != nullptr) {
-        $$->values.swap(*$6);
-        delete $6;
+        values = $6;
+      } else {
+        values = new std::vector<Value>();
       }
-      $$->values.emplace_back(*$5);
-      delete $5;
-      $$->sub_sqlnode = nullptr;
+      values->emplace_back(*$5);
+      ValueListExpr *right_expr = new ValueListExpr(values);
+      $$->right_expr = right_expr;
+      $$->comp = CompOp::NOT_IN;
     }
     | EXISTS_T LBRACE select_stmt RBRACE {
       $$ = new ConditionSqlNode;
+      $$->neither = 1;
       $$->is_subquery = 1;
+      DumbExpr *left_expr = new DumbExpr();
+      $$->left_expr = left_expr;
+      UnboundSubqueryExpr *right_expr = new UnboundSubqueryExpr($3);
+      $$->right_expr = right_expr;
       $$->comp = CompOp::EXISTS;
-      $$->sub_sqlnode = $3;
     }
     | NOT EXISTS_T LBRACE select_stmt RBRACE {
       $$ = new ConditionSqlNode;
+      $$->neither = 1;
       $$->is_subquery = 1;
+      DumbExpr *left_expr = new DumbExpr();
+      $$->left_expr = left_expr;
+      UnboundSubqueryExpr *right_expr = new UnboundSubqueryExpr($4);
+      $$->right_expr = right_expr;
       $$->comp = CompOp::NOT_EXISTS;
-      $$->sub_sqlnode = $4;
-    }
-    | expression comp_op LBRACE select_stmt RBRACE {
-      $$ = new ConditionSqlNode;
-      $$->is_subquery = 1;
-      $$->comp = $2;
-      $$->expr = $1;
-      $$->sub_sqlnode = $4;
     }
     | LBRACE select_stmt RBRACE comp_op expression {
       $$ = new ConditionSqlNode;
+      $$->neither = 1;
       $$->is_subquery = 1;
+      UnboundSubqueryExpr *left_expr = new UnboundSubqueryExpr($2);
+      $$->left_expr = left_expr;
+      $$->right_expr = $5;
       $$->comp = $4;
-      $$->expr = $5;
-      $$->sub_sqlnode = $2;
-      $$->left_is_expr = 0;
+    }
+    | LBRACE select_stmt RBRACE comp_op LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      $$->left_expr = new UnboundSubqueryExpr($2);
+      $$->right_expr = new UnboundSubqueryExpr($6);
+      $$->comp = $4;
     }
     ;
 
@@ -1141,6 +1192,10 @@ comp_op:
     | NLK {$$ = NOT_LIKE; }
     | IS_T { $$ = IS; }
     | IS_NOT_T { $$ = IS_NOT; }
+    /* | IN_T { $$ = IN; }
+    | NOT IN_T { $$ = NOT_IN; } */
+    /* | EXISTS_T { $$ = EXISTS; }
+    | NOT EXISTS_T { $$ = NOT_EXISTS; } */
     ;
 
 // your code here

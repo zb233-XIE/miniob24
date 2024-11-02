@@ -23,6 +23,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include "sql/parser/expression_binder.h"
+#include <cstdint>
 #include <memory>
 
 using namespace std;
@@ -56,8 +57,6 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   }
 
   BinderContext binder_context;
-
-  SubqueryStmt *subquery_stmt = nullptr;
 
   // collect tables in `from` statement
   vector<Table *>                tables;
@@ -102,6 +101,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   // collect query fields in `select` statement
   vector<unique_ptr<Expression>> bound_expressions;
   ExpressionBinder expression_binder(binder_context);
+  expression_binder.set_db(db);
   
   for (unique_ptr<Expression> &expression : select_sql.expressions) {
     RC rc = expression_binder.bind_expression(expression, bound_expressions);
@@ -151,42 +151,14 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       }
       condition.left_expr = left_bound_expressions[0].release();
       condition.right_expr = right_bound_expressions[0].release();
-    } else if (condition.is_subquery) { // 对于子查询，这个循环的作用是生成subquery stmt
-      if (subquery_stmt == nullptr) {
-        subquery_stmt = new SubqueryStmt();
-      }
-
-      Expression *   bound_sub_expr = nullptr;
-      Stmt *         sub_stmt       = nullptr;
-      // 绑定表达式
-      if (condition.expr) {  // exists不需要表达式
-        vector<unique_ptr<Expression>> bound_expressions;
-        std::unique_ptr<Expression>    expr = std::unique_ptr<Expression>(condition.expr);
-        expression_binder.bind_expression(expr, bound_expressions);  // 此处内存泄漏，因为现在尚未对该字段处理
-        if (OB_FAIL(rc)) {
-          LOG_INFO("bind expression failed. rc=%s", strrc(rc));
-          return rc;
-        }
-        bound_sub_expr = bound_expressions[0].release();
-      }
-
-      if (condition.sub_sqlnode != nullptr) { // 创造子select stmt
-        ParsedSqlNode *sub_sql_node   = condition.sub_sqlnode;
-        Stmt::create_stmt(db, *sub_sql_node, sub_stmt);
-        delete sub_sql_node;  // sub_sql_node到这里已经没用了，删除之
-      }
-
-      rc = subquery_stmt->add_unit(condition, bound_sub_expr, sub_stmt);
-      if (OB_FAIL(rc)) {
-        LOG_INFO("add subquery unit failed. rc=%s", strrc(rc));
-        return rc;
-      }
     }
   }
 
   // 10. 在conditions中删除子查询的内容，因为后面要根据conditions构建filter stmt
+  std::vector<ConditionSqlNode> subquery_conditions;
   for (auto it = select_sql.conditions.begin(); it != select_sql.conditions.end(); ) {
     if (it->is_subquery) {
+      subquery_conditions.push_back(std::move(*it));
       it = select_sql.conditions.erase(it);
     } else {
       it++;
@@ -272,6 +244,19 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       filter_stmt);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct filter stmt");
+    return rc;
+  }
+
+  // 10. 为subquery构造subquery statement
+  SubqueryStmt *subquery_stmt = nullptr;
+  rc                          = SubqueryStmt::create(db,
+      default_table,
+      &table_map,
+      subquery_conditions.data(),
+      static_cast<int>(subquery_conditions.size()),
+      subquery_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct subquery stmt");
     return rc;
   }
 

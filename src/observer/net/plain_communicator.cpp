@@ -92,6 +92,14 @@ RC PlainCommunicator::read_event(SessionEvent *&event)
   return rc;
 }
 
+void PlainCommunicator::change_writer()
+{
+  if (writer_ == nullptr) return;
+  int fd = writer_->disable_fd();
+  delete writer_;
+  writer_ = new BufferedWriter(fd);
+}
+
 RC PlainCommunicator::write_state(SessionEvent *event, bool &need_disconnect)
 {
   SqlResult    *sql_result   = event->sql_result();
@@ -245,6 +253,11 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
   }
 
   if (OB_FAIL(rc)) {
+    sql_result->close();
+    // 为了输出错误信息，清空之前的信息，需要更换buffered_writer
+    change_writer();
+    event->sql_result()->set_return_code(rc);
+    write_state(event, need_disconnect);
     return rc;
   }
 

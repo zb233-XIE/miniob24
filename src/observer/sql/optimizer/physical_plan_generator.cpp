@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include <utility>
 
 #include "common/log/log.h"
+#include "common/rc.h"
 #include "sql/expr/expression.h"
 #include "sql/operator/aggregate_vec_physical_operator.h"
 #include "sql/operator/calc_logical_operator.h"
@@ -215,6 +216,21 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
   return RC::SUCCESS;
 }
 
+RC PhysicalPlanGenerator::create_subquery_physical_plan(unique_ptr<Expression> &expr)
+{
+  auto                         subquery_expr = static_cast<BoundSubqueryExpr *>(expr.get());
+  unique_ptr<LogicalOperator> &logical_oper  = subquery_expr->get_logical_operator();
+  unique_ptr<PhysicalOperator> physical_oper;
+  RC rc = create(*logical_oper, physical_oper);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create subquery operator of predicate operator. rc=%s", strrc(rc));
+    return rc;
+  }
+  subquery_expr->set_physical_operator(physical_oper);
+  subquery_expr->set_trx(this->trx_);
+  return rc;
+}
+
 RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, unique_ptr<PhysicalOperator> &oper)
 {
   vector<unique_ptr<LogicalOperator>> &children_opers = pred_oper.children();
@@ -237,36 +253,34 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
   if (expression->type() == ExprType::CONJUNCTION) {
     auto conj_expr = static_cast<ConjunctionExpr *>(expression.get());
     std::vector<std::unique_ptr<Expression>> &exprs = conj_expr->children();
-    for (auto &expr : exprs) {
-      if (expr->type() == ExprType::SUBQUERY) {
-        auto subquery_expr = static_cast<SubqueryExpr *>(expr.get());
-        unique_ptr<LogicalOperator> &logical_oper = subquery_expr->get_logical_operator();
-        unique_ptr<PhysicalOperator> physical_oper;
-        if (logical_oper) {
-          rc = create(*logical_oper, physical_oper);
-          if (rc != RC::SUCCESS) {
-            LOG_WARN("failed to create subquery operator of predicate operator. rc=%s", strrc(rc));
-            return rc;
-          }
-          subquery_expr->set_physical_operator(physical_oper);
-          subquery_expr->set_trx(this->trx_);
-        }
+    for (auto &expr : exprs) { // 每个expr是comparison
+      // ASSERT(expr->type() == ExprType::COMPARISON, "expr type should be COMPARISON");
+      if (expr->type() != ExprType::COMPARISON) {
+        break;
+      }
+      auto raw_expr = static_cast<ComparisonExpr *>(expr.get());
+      auto &left_expr = raw_expr->left();
+      auto &right_expr = raw_expr->right();
+      if (left_expr->type() == ExprType::BOUND_SUBQUERY) {
+        create_subquery_physical_plan(left_expr);
+      }
+      if (right_expr->type() == ExprType::BOUND_SUBQUERY) {
+        create_subquery_physical_plan(right_expr);
       }
     }
-  } else if (expression->type() == ExprType::SUBQUERY) { // 当conjunction里面的表达式只有1个时，这层壳会被优化掉，见conjunction_simplification_rule.cpp
-    auto                         subquery_expr = static_cast<SubqueryExpr *>(expression.get());
-    unique_ptr<LogicalOperator> &logical_oper  = subquery_expr->get_logical_operator();
-    unique_ptr<PhysicalOperator> physical_oper;
-    if (logical_oper) {
-      rc = create(*logical_oper, physical_oper);
-      if (rc != RC::SUCCESS) {
-        LOG_WARN("failed to create subquery operator of predicate operator. rc=%s", strrc(rc));
-        return rc;
-      }
-      subquery_expr->set_physical_operator(physical_oper);
-      subquery_expr->set_trx(this->trx_);
+  } else if (expression->type() == ExprType::COMPARISON) {
+    // 当conjunction里面的表达式只有1个时，这层壳会被优化掉，见conjunction_simplification_rule.cpp
+    auto comp_expr = static_cast<ComparisonExpr *>(expression.get());
+    auto &left_expr = comp_expr->left();
+    auto &right_expr = comp_expr->right();
+    if (left_expr->type() == ExprType::BOUND_SUBQUERY) {
+      create_subquery_physical_plan(left_expr);
+    }
+    if (right_expr->type() == ExprType::BOUND_SUBQUERY) {
+      create_subquery_physical_plan(right_expr);
     }
   }
+
   oper = unique_ptr<PhysicalOperator>(new PredicatePhysicalOperator(std::move(expression)));
   oper->add_child(std::move(child_phy_oper));
   return rc;
