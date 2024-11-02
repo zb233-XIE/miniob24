@@ -1025,7 +1025,7 @@ join_list:
 join:
     INNER JOIN relation ON condition_list {
       $$ = new std::tuple<std::string, std::vector<ConditionSqlNode> *>($3->name, $5);
-      free($3);
+      delete $3;
     }
 
 where:

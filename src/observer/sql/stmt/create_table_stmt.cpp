@@ -32,8 +32,10 @@ RC CreateTableStmt::create(Db *db, const CreateTableSqlNode &create_table, Stmt 
     }
     stmt = new CreateTableStmt(create_table.relation_name, create_table.attr_infos, storage_format);
   } else {
-    SelectStmt *select_stmt = nullptr;
-    Stmt::create_stmt(db, *create_table.subquery, (Stmt *&)select_stmt);
+    // SelectStmt *select_stmt = nullptr;
+    Stmt *__select_stmt = nullptr;
+    Stmt::create_stmt(db, *create_table.subquery, __select_stmt);
+    SelectStmt *select_stmt = dynamic_cast<SelectStmt *>(__select_stmt);
     CreateTableStmt *create_stmt = new CreateTableStmt(create_table.relation_name, select_stmt); 
     create_stmt->set_default_subq_table_name(create_table.subquery->selection.relations[0].name);
 

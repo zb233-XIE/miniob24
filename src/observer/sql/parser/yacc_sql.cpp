@@ -2981,7 +2981,7 @@ yyreduce:
 #line 1026 "yacc_sql.y"
                                           {
       (yyval.join_tuple) = new std::tuple<std::string, std::vector<ConditionSqlNode> *>((yyvsp[-2].relation)->name, (yyvsp[0].condition_list));
-      free((yyvsp[-2].relation));
+      delete (yyvsp[-2].relation);
     }
 #line 2987 "yacc_sql.cpp"
     break;

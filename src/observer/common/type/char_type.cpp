@@ -72,12 +72,23 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
 {
   switch (type) {
     case AttrType::INTS: {
-      int res = atoi(val.get_string().c_str());
+      const char *src = val.data();
+      char *end;
+      int res = strtol(src, &end, 10);
+      if (errno == ERANGE || errno == EINVAL || src == end) {
+        return RC::INVALID_ARGUMENT;
+      }
       result = Value((int)res);
       break;
     }
     case AttrType::FLOATS: {
-      float res = atof(val.get_string().c_str());
+      const char *src = val.data();
+      char *end;
+      float res = strtof(val.get_string().c_str(), &end);
+      if (errno == ERANGE || src != end) {
+        return RC::INVALID_ARGUMENT;
+      }
+
       result = Value((float)res);
       break;
     }
