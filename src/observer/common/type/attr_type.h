@@ -30,7 +30,7 @@ enum class AttrType
   MAXTYPE,   ///< 请在 UNDEFINED 与 MAXTYPE 之间增加新类型
 };
 
-static constexpr int LOB_OVERFLOW_THRESHOLD = 10 + sizeof(PageNum);
+static constexpr int LOB_OVERFLOW_THRESHOLD = 1000 + sizeof(PageNum);
 static constexpr int LOB_MAX_SIZE           = UINT16_MAX;
 
 const char *attr_type_to_string(AttrType type);
