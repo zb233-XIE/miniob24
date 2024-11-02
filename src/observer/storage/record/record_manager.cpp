@@ -24,6 +24,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/table/table.h"
 #include "storage/trx/trx.h"
 #include "storage/clog/log_handler.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <memory>
@@ -1203,7 +1204,7 @@ RC RecordFileScanner::expand_lob_fields()
     // form new record
     int current_offset       = 0;
     int output_record_offset = 0;
-    next_record_.set_owner(false);
+
     next_record_.new_record(table_meta.output_record_size());
     char *output_data = next_record_.data();
 
@@ -1213,14 +1214,23 @@ RC RecordFileScanner::expand_lob_fields()
       ASSERT(current_offset == field->offset(), "");
 
       int copy_len = field->len();
+      if (field->type() == AttrType::TEXTS || field->type() == AttrType::VECTORS){
+        copy_len -= sizeof(PageNum);
+      }
       memcpy(output_data + output_record_offset, data + current_offset, copy_len);
-      if (field->type() == AttrType::TEXTS) {
+      if (field->type() == AttrType::TEXTS || field->type() == AttrType::VECTORS) {
         // check the last four bytes
         const char *lob_field_data = data + current_offset + field->len() - sizeof(PageNum);
         PageNum     overflow_page  = *reinterpret_cast<const PageNum *>(lob_field_data);
 
-        size_t in_field_len = strnlen(data + field->offset(), LOB_OVERFLOW_THRESHOLD - sizeof(PageNum));
+        size_t in_field_len = 0;
         size_t overflow_len = 0;
+
+        if(field->type() == AttrType::TEXTS){
+          in_field_len = strnlen(data + field->offset(), LOB_OVERFLOW_THRESHOLD - sizeof(PageNum));
+        } else {
+          in_field_len = std::min(static_cast<size_t>(field->len()), (LOB_VECTOR_OVERFLOW_DIM - 1) * sizeof(float));
+        }
 
         // get meta data from overflow first_page
         vector<PageNum> entries;
@@ -1261,7 +1271,7 @@ RC RecordFileScanner::expand_field(vector<PageNum> &entries, char *data, int off
     // ASSERT(offset + page_data_len <= copy_len, "");
     offset += page_data_len;
   }
-  *(char *)(data + offset + copy_len) = '\0';  // just an insurance
+  // *(char *)(data + offset + copy_len) = '\0';  // just an insurance
   return rc;
 }
 

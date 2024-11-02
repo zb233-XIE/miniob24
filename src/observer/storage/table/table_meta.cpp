@@ -80,7 +80,8 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
           field_offset,
           field_meta.len(),
           false /*visible*/,
-          field_meta.field_id());
+          field_meta.field_id(),
+          field_meta.nullable());
       output_fields_[i]           = FieldMeta(field_meta.name(),  // output
           field_meta.type(),
           output_field_offset,
@@ -105,27 +106,37 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
     size_t attr_len        = attr_info.length;  // input
     size_t output_attr_len = attr_info.length;  // output
     if (attr_info.type == AttrType::VECTORS) {
-      if (attr_len >= 16000) {
+      contain_lob_ = true;
+      if (attr_len > LOB_VECTOR_MAX_DIM) {
         LOG_ERROR("Only support dim(vectors) <= 16000");
         return RC::UNSUPPORTED;
       }
-      attr_len     = attr_len * sizeof(float);
-      output_attr_len = attr_len;
-      contain_lob_ = false;
+      if(attr_len >= LOB_VECTOR_OVERFLOW_DIM){
+        // vector overflow
+        attr_len = LOB_VECTOR_OVERFLOW_DIM * sizeof(float);
+      } else {
+        attr_len = (attr_len + 1) * sizeof(float);
+      }
+      output_attr_len *= sizeof(float);
     } else if (attr_info.type == AttrType::TEXTS) {
-      contain_lob_ = true;
+      contain_lob_    = true;
       output_attr_len = LOB_MAX_SIZE;
     }
     // input
     rc = fields_[i + trx_field_num].init(
-      attr_info.name.c_str(), attr_info.type, field_offset, attr_len, true /*visible*/, i, attr_info.nullable);
+        attr_info.name.c_str(), attr_info.type, field_offset, attr_len, true /*visible*/, i, attr_info.nullable);
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to init field meta. table name=%s, field name: %s", name, attr_info.name.c_str());
       return rc;
     }
     // output
-    rc = output_fields_[i + trx_field_num].init(
-        attr_info.name.c_str(), attr_info.type, output_field_offset, output_attr_len, true /*visible*/, i);
+    rc = output_fields_[i + trx_field_num].init(attr_info.name.c_str(),
+        attr_info.type,
+        output_field_offset,
+        output_attr_len,
+        true /*visible*/,
+        i,
+        attr_info.nullable);
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to init output field meta. table name=%s, field name: %s", name, attr_info.name.c_str());
       return rc;
@@ -134,7 +145,7 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
     output_field_offset += output_attr_len;  // output
   }
 
-  record_size_ = field_offset;
+  record_size_        = field_offset;
   output_record_size_ = output_field_offset;
 
   table_id_       = table_id;
@@ -328,8 +339,8 @@ int TableMeta::deserialize(std::istream &is)
 
   int32_t storage_format = storage_format_value.asInt();
 
-  RC  rc        = RC::SUCCESS;
-  int field_num = fields_value.size();
+  RC  rc               = RC::SUCCESS;
+  int field_num        = fields_value.size();
   int output_field_num = output_fields_value.size();
   ASSERT(field_num == output_field_num, "");
 
@@ -361,14 +372,13 @@ int TableMeta::deserialize(std::istream &is)
   }
   sort(output_fields.begin(), output_fields.end(), comparator);
 
-
   table_id_       = table_id;
   contain_lob_    = contain_lob;
   storage_format_ = static_cast<StorageFormat>(storage_format);
   name_.swap(table_name);
   fields_.swap(fields);
   output_fields_.swap(output_fields);
-  record_size_ = fields_.back().offset() + fields_.back().len() - fields_.begin()->offset();
+  record_size_        = fields_.back().offset() + fields_.back().len() - fields_.begin()->offset();
   output_record_size_ = output_fields_.back().offset() + output_fields_.back().len() - output_fields_.begin()->offset();
 
   for (const FieldMeta &field_meta : fields_) {
