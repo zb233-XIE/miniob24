@@ -111,7 +111,7 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
       }
       attr_len     = attr_len * sizeof(float);
       output_attr_len = attr_len;
-      contain_lob_ = true;
+      contain_lob_ = false;
     } else if (attr_info.type == AttrType::TEXTS) {
       contain_lob_ = true;
       output_attr_len = LOB_MAX_SIZE;
