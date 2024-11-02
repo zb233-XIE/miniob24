@@ -1,5 +1,6 @@
 #include "sql/operator/order_by_physical_operator.h"
 #include "sql/expr/expression_tuple.h"
+#include <algorithm>
 
 OrderByPhysicalOperator::~OrderByPhysicalOperator() {}
 

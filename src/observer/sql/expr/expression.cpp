@@ -13,10 +13,15 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/expr/expression.h"
+#include "common/log/log.h"
+#include "common/rc.h"
 #include "common/type/attr_type.h"
 #include "common/value.h"
 #include "sql/expr/tuple.h"
 #include "sql/expr/arithmetic_operator.hpp"
+#include "sql/parser/parse_defs.h"
+#include "sql/operator/physical_operator.h"
+#include "sql/stmt/stmt.h"
 
 using namespace std;
 
@@ -233,25 +238,124 @@ RC ComparisonExpr::try_get_value(Value &cell) const
   return RC::INVALID_ARGUMENT;
 }
 
+RC ComparisonExpr::compare_value_special(Value &left, Value &right, bool &value) const
+{
+  if (comp_ == CompOp::IN || comp_ == CompOp::NOT_IN) {
+    bool in = false;
+    bool not_in = true;
+    // 这种情况下left已经被算出了，right没有意义
+    // 右表达式为BoundSubquery或ValueList
+    if (right_->type() == ExprType::BOUND_SUBQUERY) {
+      auto raw_right = static_cast<BoundSubqueryExpr *>(right_.get());
+      if (raw_right->get_dim() != 1) { // 判断维度（其实可以放到stmt阶段）
+        return RC::INTERNAL;
+      }
+      auto &results = raw_right->get_results();
+      for (auto &v : results) {
+        if (left.compare(v) == 0) {
+          in = true;
+          not_in = false;
+          break;
+        }
+      }
+    } else if (right_->type() == ExprType::VALUE_LIST) {
+      auto raw_right = static_cast<ValueListExpr *>(right_.get());
+      for (auto &v : raw_right->get_values()) {
+        if (left.compare(v) == 0) {
+          in = true;
+          not_in = false;
+          break;
+        }
+      }
+    } else {
+      ASSERT(1 == 0, "should not reach here");
+    }
+    value = (comp_ == CompOp::IN ? in : not_in);
+  } else if (comp_ == CompOp::EXISTS || comp_ == CompOp::NOT_EXISTS) {
+    // 这种情况下纯看右表达式，而且右表达式必须是BoundSubquery
+    ASSERT(right_->type() == ExprType::BOUND_SUBQUERY, "(not) exists needs a subquery");
+    auto raw_right = static_cast<BoundSubqueryExpr *>(right_.get());
+    value = raw_right->get_results().size();
+  } else {
+    // 如果是比较，有三种情况：exp与subquery，subquery与exp，subquery与subquery
+    Value v_left;
+    Value v_right;
+
+    if (left_->type() != ExprType::BOUND_SUBQUERY) {
+      v_left = left;
+    } else {
+      // 根据拿到的tuple数量判断是否合法
+      auto raw_left = static_cast<BoundSubqueryExpr *>(left_.get());
+      auto &results = raw_left->get_results();
+      if (results.size() != 1) {
+        return RC::INTERNAL;
+      }
+      v_left = results[0];
+    }
+
+    if (right_->type() != ExprType::BOUND_SUBQUERY) {
+      v_right = right;
+    } else {
+      // 根据拿到的tuple数量判断是否合法
+      auto raw_right = static_cast<BoundSubqueryExpr *>(right_.get());
+      auto &results = raw_right->get_results();
+      if (results.size() != 1) {
+        return RC::INTERNAL;
+      }
+      v_right = results[0];
+    }
+
+    compare_value(v_left, v_right, value);
+  }
+  return RC::SUCCESS;
+}
+
 RC ComparisonExpr::get_value(const Tuple &tuple, Value &value) const
 {
   Value left_value;
   Value right_value;
 
-  RC rc = left_->get_value(tuple, left_value);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
-    return rc;
+  RC rc = RC::SUCCESS;
+
+  if (left_->type() == ExprType::BOUND_SUBQUERY) {
+    auto raw_left = static_cast<BoundSubqueryExpr *>(left_.get());
+    rc = raw_left->get_value(tuple);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+      return rc;
+    }
+  } else {
+    rc = left_->get_value(tuple, left_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of left expression. rc=%s", strrc(rc));
+      return rc;
+    }
   }
-  rc = right_->get_value(tuple, right_value);
-  if (rc != RC::SUCCESS) {
-    LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
-    return rc;
+
+  if (right_->type() == ExprType::BOUND_SUBQUERY) {
+    auto raw_right = static_cast<BoundSubqueryExpr *>(right_.get());
+    rc = raw_right->get_value(tuple);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+      return rc;
+    }
+  } else {
+    rc = right_->get_value(tuple, right_value);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to get value of right expression. rc=%s", strrc(rc));
+      return rc;
+    }
   }
 
   bool bool_value = false;
 
-  rc = compare_value(left_value, right_value, bool_value);
+  if (left_->type() == ExprType::BOUND_SUBQUERY || right_->type() == ExprType::BOUND_SUBQUERY ||
+      left_->type() == ExprType::VALUE_LIST || right_->type() == ExprType::VALUE_LIST ||
+      left_->type() == ExprType::DUMB || right_->type() == ExprType::DUMB) {
+    rc = compare_value_special(left_value, right_value, bool_value);
+  } else {
+    rc = compare_value(left_value, right_value, bool_value);
+  }
   if (rc == RC::SUCCESS) {
     value.set_boolean(bool_value);
   }
@@ -679,4 +783,76 @@ RC AggregateExpr::type_from_string(const char *type_str, AggregateExpr::Type &ty
     rc = RC::INVALID_ARGUMENT;
   }
   return rc;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+UnboundSubqueryExpr::UnboundSubqueryExpr(ParsedSqlNode *sub_sqlnode)
+{
+  sub_sqlnode_ = sub_sqlnode;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+ValueListExpr::ValueListExpr(std::vector<Value> *values)
+{
+  values_ = std::move(*values);
+}
+
+AttrType ValueListExpr::value_type() const
+{
+  return values_[0].attr_type();
+}
+
+RC ValueListExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  return RC::SUCCESS;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+BoundSubqueryExpr::BoundSubqueryExpr(Stmt *stmt) : stmt_(stmt) {}
+
+AttrType BoundSubqueryExpr::value_type() const
+{
+  return AttrType::UNDEFINED; // 还没考虑
+}
+
+RC BoundSubqueryExpr::get_value(const Tuple &tuple)
+{
+  // 开始之前将result清空
+  results_.clear();
+  d_ = 1;
+  RC rc = physical_oper_->open(trx_);
+  ASSERT(rc == RC::SUCCESS, "ERROR"); // debug
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to open subquery operator. rc=%s", strrc(rc));
+    return rc;
+  }
+  while (OB_SUCC(physical_oper_->next())) { // 把所有tuple读上来
+    Tuple *tuple = physical_oper_->current_tuple();
+    d_ = tuple->cell_num();
+    Value v;
+    tuple->cell_at(0, v);
+    results_.emplace_back(v);
+  }
+  rc = physical_oper_->close();
+  ASSERT(rc == RC::SUCCESS, "ERROR"); // debug
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to close subquery operator. rc=%s", strrc(rc));
+  }
+  return RC::SUCCESS;
+}
+
+RC BoundSubqueryExpr::get_value(const Tuple &tuple, Value &value) const
+{
+  // 这个函数被声明为const，无法改变results_，有点难受，用上面的函数
+  return RC::SUCCESS;
+}
+
+void BoundSubqueryExpr::set_logical_operator(unique_ptr<LogicalOperator> &logical_oper)
+{
+  logical_oper_ = std::move(logical_oper);
+}
+
+void BoundSubqueryExpr::set_physical_operator(unique_ptr<PhysicalOperator> &phy_oper)
+{
+  physical_oper_ = std::move(phy_oper);
 }

@@ -53,10 +53,16 @@ enum CompOp
   GREAT_THAN,   ///< ">"
   LIKE,         ///< "LIKE"
   NOT_LIKE,     ///< "NOT LIKE"
+  EXISTS,
+  NOT_EXISTS,
+  IN,
+  NOT_IN,
   IS,           ///< "IS"
   IS_NOT,       ///< "IS NOT"
   NO_OP
 };
+
+class ParsedSqlNode;
 
 /**
  * @brief 表示一个条件比较
@@ -83,6 +89,13 @@ struct ConditionSqlNode
   Expression *left_expr;
   
   Expression *right_expr;
+
+  /// 10. 出现子查询
+  int is_subquery = 0;
+  Expression *expr;
+  ParsedSqlNode *sub_sqlnode;
+  std::vector<Value> values; // where in (1, 2, 3)
+  int left_is_expr = 1;
 };
 
 struct OrderByItem {

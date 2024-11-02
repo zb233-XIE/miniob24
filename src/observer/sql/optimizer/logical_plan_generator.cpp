@@ -37,6 +37,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/filter_stmt.h"
 #include "sql/stmt/insert_stmt.h"
 #include "sql/stmt/select_stmt.h"
+#include "sql/stmt/subquery_stmt.h"
 #include "sql/stmt/stmt.h"
 
 #include "sql/expr/expression_iterator.h"
@@ -156,8 +157,21 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     last_oper = &predicate_oper;
   }
 
+  // having
+  unique_ptr<LogicalOperator> having_predicate_oper;
+  rc = create_plan(select_stmt->having_filter_stmt(), having_predicate_oper);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  unique_ptr<Expression> having_expression;
+  if (having_predicate_oper) {
+    having_expression = std::move(having_predicate_oper->expressions().front());
+  }
+
   unique_ptr<LogicalOperator> group_by_oper;
-  rc = create_group_by_plan(select_stmt, group_by_oper);
+  rc = create_group_by_plan(select_stmt, group_by_oper, having_expression);
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
     return rc;
@@ -169,6 +183,23 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }
 
     last_oper = &group_by_oper;
+  }
+
+  // 子查询的predicate_oper2
+  unique_ptr<LogicalOperator> predicate_oper2;
+
+  rc = create_plan(select_stmt->subquery_stmt(), predicate_oper2);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if (predicate_oper2) {
+    if (*last_oper) {
+      predicate_oper2->add_child(std::move(*last_oper));
+    }
+
+    last_oper = &predicate_oper2;
   }
 
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
@@ -285,6 +316,51 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
   return rc;
 }
 
+// 仿照参数为FilterStmt的create_plan，目的是构建出表达式为ConjunctionExpr的PredicateLogicalOperator
+// ConjunctionExpr中是多个SubqueryExpr
+RC LogicalPlanGenerator::create_plan(SubqueryStmt *subquery_stmt, unique_ptr<LogicalOperator> &logical_operator)
+{
+  RC rc = RC::SUCCESS;
+
+  const std::vector<SubqueryUnit *> &subquery_units = subquery_stmt->subquery_units();
+  std::vector<unique_ptr<Expression>> subquery_exprs;
+  for (SubqueryUnit *subquery_unit : subquery_units) {
+    unique_ptr<Expression> left;
+    unique_ptr<Expression> right;
+    left = unique_ptr<Expression>(subquery_unit->left_expr());
+    right = unique_ptr<Expression>(subquery_unit->right_expr());
+
+    // 对于left和right中的stmt，递归地创建其logical plan
+    if (left->type() == ExprType::BOUND_SUBQUERY) {
+      auto row_left = static_cast<BoundSubqueryExpr *>(left.get());
+      Stmt *sub_stmt = row_left->stmt();
+      unique_ptr<LogicalOperator> sub_logical_operator;
+      create(sub_stmt, sub_logical_operator);
+      row_left->set_logical_operator(sub_logical_operator);
+    }
+
+    if (right->type() == ExprType::BOUND_SUBQUERY) {
+      auto row_right = static_cast<BoundSubqueryExpr *>(right.get());
+      Stmt *sub_stmt = row_right->stmt();
+      unique_ptr<LogicalOperator> sub_logical_operator;
+      create(sub_stmt, sub_logical_operator);
+      row_right->set_logical_operator(sub_logical_operator);
+    }
+
+    ComparisonExpr *cmp_expr = new ComparisonExpr(subquery_unit->comp(), std::move(left), std::move(right));
+    subquery_exprs.emplace_back(cmp_expr);
+  }
+
+  unique_ptr<PredicateLogicalOperator> predicate_oper;
+  if (!subquery_exprs.empty()) {
+    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, subquery_exprs));
+    predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
+  }
+
+  logical_operator = std::move(predicate_oper);
+  return rc;
+}
+
 int LogicalPlanGenerator::implicit_cast_cost(AttrType from, AttrType to)
 {
   if (from == to) {
@@ -375,7 +451,7 @@ RC LogicalPlanGenerator::create_plan(ExplainStmt *explain_stmt, unique_ptr<Logic
   return rc;
 }
 
-RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator)
+RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_ptr<LogicalOperator> &logical_operator, unique_ptr<Expression> &having_expr)
 {
   vector<unique_ptr<Expression>> &group_by_expressions = select_stmt->group_by();
   vector<Expression *> aggregate_expressions;
@@ -455,6 +531,9 @@ RC LogicalPlanGenerator::create_group_by_plan(SelectStmt *select_stmt, unique_pt
 
   auto group_by_oper = make_unique<GroupByLogicalOperator>(std::move(group_by_expressions),
                                                            std::move(aggregate_expressions));
+  if (having_expr) {
+    group_by_oper->set_having_check(having_expr);
+  }
   logical_operator = std::move(group_by_oper);
   return RC::SUCCESS;
 }

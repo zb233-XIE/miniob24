@@ -33,6 +33,8 @@ public:
   RC read_event(SessionEvent *&event) override;
   RC write_result(SessionEvent *event, bool &need_disconnect) override;
 
+  void change_writer();
+
 private:
   RC write_state(SessionEvent *event, bool &need_disconnect);
   RC write_debug(SessionEvent *event, bool &need_disconnect);

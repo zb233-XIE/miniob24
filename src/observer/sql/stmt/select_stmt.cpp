@@ -17,9 +17,13 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/rc.h"
 #include "sql/stmt/filter_stmt.h"
+#include "sql/stmt/subquery_stmt.h"
+#include "sql/parser/parse_defs.h"
+#include "sql/stmt/stmt.h"
 #include "storage/db/db.h"
 #include "storage/table/table.h"
 #include "sql/parser/expression_binder.h"
+#include <cstdint>
 #include <memory>
 
 using namespace std;
@@ -34,6 +38,14 @@ SelectStmt::~SelectStmt()
   for (FilterStmt *filter_stmt : join_filter_stmts_) {
     delete filter_stmt;
     filter_stmt = nullptr;
+  }
+  if (nullptr != having_filter_stmt_) {
+    delete having_filter_stmt_;
+    having_filter_stmt_ = nullptr;
+  }
+  if (nullptr != subquery_stmt_) {
+    delete subquery_stmt_;
+    subquery_stmt_ = nullptr;
   }
 }
 
@@ -89,6 +101,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   // collect query fields in `select` statement
   vector<unique_ptr<Expression>> bound_expressions;
   ExpressionBinder expression_binder(binder_context);
+  expression_binder.set_db(db);
   
   for (unique_ptr<Expression> &expression : select_sql.expressions) {
     RC rc = expression_binder.bind_expression(expression, bound_expressions);
@@ -121,6 +134,17 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     }
   }
 
+  // 10. 在conditions中删除子查询的内容，因为后面要根据conditions构建filter stmt
+  std::vector<ConditionSqlNode> subquery_conditions;
+  for (auto it = select_sql.conditions.begin(); it != select_sql.conditions.end(); ) {
+    if (it->is_subquery) {
+      subquery_conditions.push_back(std::move(*it));
+      it = select_sql.conditions.erase(it);
+    } else {
+      it++;
+    }
+  }
+
   // 9. 绑定select_sql.join_conditions中的表达式
   for (std::vector<ConditionSqlNode> *conditions : select_sql.join_conditions) {
     for (ConditionSqlNode &condition : *conditions) {
@@ -146,28 +170,28 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     }
   }
 
-  // // 18. 绑定select_sql.having中的表达式
-  // for (ConditionSqlNode &condition : select_sql.having) {
-  //   RC rc = RC::SUCCESS;
-  //   if (condition.neither) {
-  //     vector<unique_ptr<Expression>> left_bound_expressions;
-  //     vector<unique_ptr<Expression>> right_bound_expressions;
-  //     std::unique_ptr<Expression> left_expr = std::unique_ptr<Expression>(condition.left_expr);
-  //     std::unique_ptr<Expression> right_expr = std::unique_ptr<Expression>(condition.right_expr);
-  //     rc = expression_binder.bind_expression(left_expr, left_bound_expressions);
-  //     if (OB_FAIL(rc)) {
-  //       LOG_INFO("bind expression failed. rc=%s", strrc(rc));
-  //       return rc;
-  //     }
-  //     rc = expression_binder.bind_expression(right_expr, right_bound_expressions);
-  //     if (OB_FAIL(rc)) {
-  //       LOG_INFO("bind expression failed. rc=%s", strrc(rc));
-  //       return rc;
-  //     }
-  //     condition.left_expr = left_bound_expressions[0].release();
-  //     condition.right_expr = right_bound_expressions[0].release();
-  //   }
-  // }
+  // 18. 绑定select_sql.having中的表达式
+  for (ConditionSqlNode &condition : select_sql.having) {
+    RC rc = RC::SUCCESS;
+    if (condition.neither) {
+      vector<unique_ptr<Expression>> left_bound_expressions;
+      vector<unique_ptr<Expression>> right_bound_expressions;
+      std::unique_ptr<Expression> left_expr = std::unique_ptr<Expression>(condition.left_expr);
+      std::unique_ptr<Expression> right_expr = std::unique_ptr<Expression>(condition.right_expr);
+      rc = expression_binder.bind_expression(left_expr, left_bound_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+      rc = expression_binder.bind_expression(right_expr, right_bound_expressions);
+      if (OB_FAIL(rc)) {
+        LOG_INFO("bind expression failed. rc=%s", strrc(rc));
+        return rc;
+      }
+      condition.left_expr = left_bound_expressions[0].release();
+      condition.right_expr = right_bound_expressions[0].release();
+    }
+  }
 
 
   vector<unique_ptr<Expression>> group_by_expressions;
@@ -197,6 +221,19 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     return rc;
   }
 
+  // 10. 为subquery构造subquery statement
+  SubqueryStmt *subquery_stmt = nullptr;
+  rc                          = SubqueryStmt::create(db,
+      default_table,
+      &table_map,
+      subquery_conditions.data(),
+      static_cast<int>(subquery_conditions.size()),
+      subquery_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct subquery stmt");
+    return rc;
+  }
+
   // 9. 为join中的所有on构造filter statement
   vector<FilterStmt *> filter_stmts;
   for (size_t i = 0; i < select_sql.join_conditions.size(); i ++) {
@@ -220,6 +257,19 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     delete conditions;
   }
 
+  // 18. 为having构造filter statement
+  FilterStmt *having_filter_stmt = nullptr;
+  rc                             = FilterStmt::create(db,
+      default_table,
+      &table_map,
+      select_sql.having.data(),
+      static_cast<int>(select_sql.having.size()),
+      having_filter_stmt);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("cannot construct filter stmt");
+    return rc;
+  }
+  
   // 17. create orderby stmt
   OrderByStmt *order_by_stmt;
   if (select_sql.order_by.empty()) {
@@ -236,6 +286,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->filter_stmt_ = filter_stmt;
   select_stmt->group_by_.swap(group_by_expressions);
   select_stmt->join_filter_stmts_.swap(filter_stmts);
+  select_stmt->having_filter_stmt_ = having_filter_stmt;
+  select_stmt->subquery_stmt_ = subquery_stmt;
   select_stmt->order_by_ = order_by_stmt;
   stmt                      = select_stmt;
   return RC::SUCCESS;
