@@ -131,7 +131,7 @@ RC CharType::to_string(const Value &val, string &result) const
 
   stringstream ss;
   int len = 0;
-  while(len < val.length_ && *(val.value_.pointer_value_ + len) != '0') len++;
+  while(len < val.length_ && *(val.value_.pointer_value_ + len) != '\0') len++;
   result = string(val.value_.pointer_value_, len);
   return RC::SUCCESS;
 }
