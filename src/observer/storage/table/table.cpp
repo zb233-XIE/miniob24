@@ -295,6 +295,15 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value &    value = values[i];
+
+    if(field->type() == AttrType::VECTORS && value.attr_type() == AttrType::VECTORS){
+      int dim = table_meta_.out_field(i + normal_field_start_index)->len() / sizeof(float);
+      if(dim != value.length()){ // dimension mismatch
+        LOG_WARN("wrong dimension, required: %d, get: %d", dim, values->length());
+        return RC::INVALID_ARGUMENT;
+      }
+    }
+
     if (field->type() != value.attr_type() && !value.get_null()) {
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);
@@ -302,6 +311,13 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
         LOG_WARN("failed to cast value. table name:%s,field name:%s,value:%s ",
             table_meta_.name(), field->name(), value.to_string().c_str());
         break;
+      }
+      if (field->type() == AttrType::VECTORS) {
+        int dim = table_meta_.out_field(i + normal_field_start_index)->len() / sizeof(float);
+        if (dim != real_value.length()) {  // dimension mismatch
+          LOG_WARN("wrong dimension, required: %d, get: %d", dim, real_value.length());
+          return RC::INVALID_ARGUMENT;
+        }
       }
       rc = set_value_to_record(record_data, real_value, field);
     } else {
@@ -328,10 +344,18 @@ RC Table::make_record_lob_anno(int value_num, const Value *values, Record_LOB_AN
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
     const Value     &value = values[i];
     Field_LOB_ANNO   field_anno;
-    if (field->type() == AttrType::TEXTS) {
+    if (field->type() == AttrType::TEXTS || field->type() == AttrType::VECTORS) {
       field_anno.set_lob_field();
       size_t field_len = field->len() - sizeof(PageNum);
       int    value_len = value.length();
+      if(field->type() != value.attr_type()){
+        Value real_value;
+        rc = Value::cast_to(value, field->type(), real_value);
+        value_len = real_value.length();
+      }
+      if(field->type() == AttrType::VECTORS){
+        value_len *= sizeof(float);
+      }
       if (field_len < value_len) {
         char *spill_data = const_cast<char *>(value.data()) + field_len;
         int   spill_len  = value_len - field_len;
@@ -352,10 +376,8 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
       copy_len = data_len + 1;
     }
   } else if (field->type() == AttrType::VECTORS) {
-    if (copy_len != data_len * sizeof(float)) {
-      LOG_INFO("vector length mismatch, wanted: %d, have: %d", copy_len/sizeof(float), data_len);
-      return RC::INVALID_ARGUMENT;
-    }
+    copy_len -= sizeof(PageNum);
+    *(PageNum *)(record_data + field->offset() + copy_len) = BP_INVALID_PAGE_NUM;
   } else if (field->type() == AttrType::TEXTS) {
     // for AttrType::TEXT
     // storage model: | ---- data ---- | 4B for page num |
