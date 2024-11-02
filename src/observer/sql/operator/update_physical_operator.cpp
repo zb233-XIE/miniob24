@@ -86,7 +86,11 @@ RC UpdatePhysicalOperator::open(Trx *trx)
 
     for (size_t i = 0; i < fields_.size(); i++) {
       if (values_[i].get_null()) {
-        *(int8_t *)(updated_data + fields_[i].offset()) = NULL_MAGIC_NUMBER;
+        if (fields_[i].type() == AttrType::CHARS) {
+          *(uint8_t *)(updated_data + fields_[i].offset()) = NULL_CHAR_MAGIC_NUMBER;
+        } else {
+          *(uint32_t *)(updated_data + fields_[i].offset()) = NULL_INT_MAGIC_NUMER;
+        }
         continue;
       }
       

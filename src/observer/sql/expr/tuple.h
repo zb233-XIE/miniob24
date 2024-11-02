@@ -214,9 +214,16 @@ public:
 
     // check if cell is null
     if (field_meta->nullable()) {
-      uint8_t *null_flag = (uint8_t *)(this->record_->data() + field_meta->offset());
-      if (*null_flag == NULL_MAGIC_NUMBER) {
-        cell.set_null();
+      uint8_t *null_char_flag = (uint8_t *)(this->record_->data() + field_meta->offset());
+      uint32_t *null_int_flag = (uint32_t *)(this->record_->data() + field_meta->offset());
+      if (field_meta->type() == AttrType::CHARS) {
+        if (*null_char_flag == NULL_CHAR_MAGIC_NUMBER) {
+          cell.set_null();
+        }
+      } else {
+        if (*null_int_flag == NULL_INT_MAGIC_NUMER) {
+          cell.set_null();
+        }
       }
     }
 

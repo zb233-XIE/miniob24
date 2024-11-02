@@ -20,7 +20,8 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/span.h"
 #include "common/lang/functional.h"
 
-#define NULL_MAGIC_NUMBER 0x8D
+#define NULL_CHAR_MAGIC_NUMBER 0x8D
+#define NULL_INT_MAGIC_NUMER 1145141919
 
 struct RID;
 class Record;
