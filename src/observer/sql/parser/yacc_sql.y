@@ -984,6 +984,7 @@ relation:
     ID {
       $$ = new RelationSqlNode();
       $$->name = $1;
+      $$->alias = "";
       free($1);
     }
     | ID ID {

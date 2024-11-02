@@ -85,7 +85,7 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
       const char *src = val.data();
       char *end;
       float res = strtof(val.get_string().c_str(), &end);
-      if (errno == ERANGE || src != end) {
+      if (errno == ERANGE || src == end) {
         return RC::INVALID_ARGUMENT;
       }
 
