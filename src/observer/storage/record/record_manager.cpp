@@ -1203,6 +1203,7 @@ RC RecordFileScanner::expand_lob_fields()
     // form new record
     int current_offset       = 0;
     int output_record_offset = 0;
+    next_record_.set_owner(false);
     next_record_.new_record(table_meta.output_record_size());
     char *output_data = next_record_.data();
 
