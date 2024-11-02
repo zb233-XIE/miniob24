@@ -1172,7 +1172,6 @@ RC RecordFileScanner::expand_lob_fields()
       output_record_offset += out_field->len();
       current_offset += field->len();
     }
-    LOG_DEBUG("%d : %d", output_record_offset, table_meta.output_record_size());
     ASSERT(output_record_offset == table_meta.output_record_size(), "");
   }
   return rc;
