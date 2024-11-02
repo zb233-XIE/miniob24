@@ -176,6 +176,12 @@ public:
     this->data_ = data;
     this->len_  = len;
   }
+
+  void set_owner(bool own)
+  {
+    this->owner_  = own;
+  }
+
   void set_data_owner(char *data, int len)
   {
     ASSERT(len != 0, "the len of data should not be 0");
