@@ -24,9 +24,9 @@ string token_name(const char *sql_string, YYLTYPE *llocp)
   return string(sql_string + llocp->first_column, llocp->last_column - llocp->first_column + 1);
 }
 
-int yyerror(YYLTYPE *llocp, const char *sql_string, ParsedSqlResult *sql_result, yyscan_t scanner, const char *msg)
+int yyerror(YYLTYPE *llocp, const char *sql_string, ParsedSqlResult *sql_result, yyscan_t scanner, SqlCommandFlag flag, const char *msg)
 {
-  std::unique_ptr<ParsedSqlNode> error_sql_node = std::make_unique<ParsedSqlNode>(SCF_ERROR);
+  std::unique_ptr<ParsedSqlNode> error_sql_node = std::make_unique<ParsedSqlNode>(flag);
   error_sql_node->error.error_msg = msg;
   error_sql_node->error.line = llocp->first_line;
   error_sql_node->error.column = llocp->first_column;
@@ -80,6 +80,7 @@ bool is_valid_date(const char *date) {
 %parse-param { const char * sql_string }
 %parse-param { ParsedSqlResult * sql_result }
 %parse-param { void * scanner }
+%parse-param { SqlCommandFlag flag }
 
 //标识tokens
 %token  SEMICOLON
@@ -87,6 +88,7 @@ bool is_valid_date(const char *date) {
         CREATE
         DROP
         GROUP
+        HAVING
         TABLE
         TABLES
         INDEX
@@ -134,12 +136,29 @@ bool is_valid_date(const char *date) {
         NE
         LK
         NLK
+        IS_T
+        IS_NOT_T
+        MAX
+        MIN
+        COUNT
+        AVG
+        SUM
+        INNER
+        JOIN
         UNIQUE
         LBRACKET
         RBRACKET
         L2_DISTANCE
         COSINE_DISTANCE
         INNER_PRODUCT
+        EXISTS_T
+        NOT
+        IN_T
+
+        NULL_T
+        NOT_NULL_T
+				ORDER_BY
+				ASC
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -153,8 +172,13 @@ bool is_valid_date(const char *date) {
   AttrInfoSqlNode *                          attr_info;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
+  // std::vector<Expression *> *                agg_fun_attr_list;
+  OrderByItem *                              order_by_item;
+  std::vector<OrderByItem> *                 order_by_list;
   std::vector<Value> *                       value_list;
   std::vector<ConditionSqlNode> *            condition_list;
+  std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *> *  join_tuple_list;
+  std::tuple<std::string, std::vector<ConditionSqlNode> *> *  join_tuple;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
   std::vector<std::string> *                 relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
@@ -163,6 +187,8 @@ bool is_valid_date(const char *date) {
   int                                        number;
   float                                      floats;
   char *                                     date;
+  bool                                       nullable_spec;
+  bool                                       asc_desc;
 }
 
 %token <number> NUMBER
@@ -178,14 +204,20 @@ bool is_valid_date(const char *date) {
 %type <value>               value
 %type <number>              number
 %type <string>              relation
+/* %type <condition>           subquery */
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
+%type <expression>          agg_fun_attr
+%type <expression>          agg_fun_attr_list
 %type <attr_infos>          attr_def_list
 %type <attr_info>           attr_def
 %type <value_list>          value_list
 %type <floats>              vector_elem
 %type <vector_elem_list>    vector_value_list
 %type <condition_list>      where
+%type <condition_list>      having
+%type <join_tuple_list>     join_list
+%type <join_tuple>          join
 %type <condition_list>      condition_list
 %type <string>              storage_format
 %type <relation_list>       rel_list
@@ -215,9 +247,16 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            command_wrapper
 %type <set_clause>          set_clause
 %type <set_clause_list>     set_clause_list
+%type <nullable_spec>       nullable_spec
+%type <order_by_item>       order_by_item
+%type <asc_desc>            asc_desc
+%type <order_by_list>       order_by_list
+%type <order_by_list>       order_by
+
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
 
+%nonassoc EQ LT GT LE GE NE
 %left '+' '-'
 %left '*' '/'
 %nonassoc UMINUS
@@ -391,31 +430,40 @@ attr_def_list:
     ;
     
 attr_def:
-    ID type LBRACE number RBRACE 
-    {
-      $$ = new AttrInfoSqlNode;
-      $$->type = (AttrType)$2;
-      $$->name = $1;
-      $$->length = $4;
-      free($1);
+  ID type LBRACE number RBRACE nullable_spec
+  {
+    $$ = new AttrInfoSqlNode;
+    $$->type = (AttrType)$2;
+    $$->name = $1;
+    $$->length = $4;
+    $$->nullable = $6;
+    free($1);
+  }
+  | ID type nullable_spec
+  {
+    $$ = new AttrInfoSqlNode;
+    $$->type = (AttrType)$2;
+    $$->name = $1;
+    if ((AttrType)$2 == AttrType::DATES) {
+      $$->length = 8;
+    } else if ((AttrType)$2 == AttrType::CHARS) {
+      $$->length = 32;
+    } else if ((AttrType)$2 == AttrType::TEXTS) {
+      $$->length = LOB_OVERFLOW_THRESHOLD;
+    } else {
+      $$->length = 4;
     }
-    | ID type
-    {
-      $$ = new AttrInfoSqlNode;
-      $$->type = (AttrType)$2;
-      $$->name = $1;
-      if ((AttrType)$2 == AttrType::DATES) {
-        $$->length = 8;
-      } else if ((AttrType)$2 == AttrType::CHARS) {
-        $$->length = 32;
-      } else if ((AttrType)$2 == AttrType::TEXTS) {
-        $$->length = LOB_OVERFLOW_THRESHOLD;
-      } else {
-        $$->length = 4;
-      }
-      free($1);
-    }
-    ;
+    $$->nullable = $3;
+    free($1);
+  }
+  ;
+
+nullable_spec:
+  NULL_T { $$ = true; }
+  | NOT_NULL_T { $$ = false; }
+  | /* empty */ { $$ = true; }
+  ;
+
 number:
     NUMBER {$$ = $1;}
     ;
@@ -494,6 +542,10 @@ value:
       std::reverse(cur->begin(), cur->end());
       $$ = new Value(cur->data(), cur->size());
       delete cur;
+    }
+    | NULL_T {
+      $$ = new Value();
+      $$->set_null();
     }
     ;
 vector_elem:
@@ -581,12 +633,21 @@ set_clause:
     $$ = new SetClauseSqlNode;
     $$->attribute_name = $1;
     $$->value = *$3;
+    $$->has_subquery = false;
+    $$->subquery = nullptr;
     free($1);
     delete $3;
   }
+  | ID EQ LBRACE select_stmt RBRACE {
+    $$ = new SetClauseSqlNode;
+    $$->attribute_name = $1;
+    $$->has_subquery = true;
+    $$->subquery = $4;
+    free($1);
+  }
   ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list where group_by
+    SELECT expression_list FROM rel_list join_list where group_by having order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       if ($2 != nullptr) {
@@ -600,16 +661,93 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if ($5 != nullptr) {
-        $$->selection.conditions.swap(*$5);
+        $$->selection.join_relations.swap(*(std::get<0>(*$5)));
+        $$->selection.join_conditions.swap(*(std::get<1>(*$5)));
+        delete std::get<0>(*$5);
+        delete std::get<1>(*$5);
+        std::reverse($$->selection.join_relations.begin(), $$->selection.join_relations.end());
+        std::reverse($$->selection.join_conditions.begin(), $$->selection.join_conditions.end());
         delete $5;
       }
 
       if ($6 != nullptr) {
-        $$->selection.group_by.swap(*$6);
+        $$->selection.conditions.swap(*$6);
         delete $6;
       }
-    }
-    ;
+
+      if ($7 != nullptr) {
+        $$->selection.group_by.swap(*$7);
+        delete $7;
+      }
+
+      // 处理having，having和where不能共存，先不考虑出现这种测试用例
+      if ($8 != nullptr) {
+        $$->selection.having.swap(*$8);
+        delete $8;
+      }
+
+			if ($9 != nullptr) {
+				$$->selection.order_by.swap(*$9);
+				delete $9;
+			}
+	}
+	;
+
+order_by:
+	/* empty */
+	{
+		$$ = nullptr;
+	}
+	| ORDER_BY order_by_list
+	{
+		$$ = $2;
+	}
+	;
+
+order_by_list:
+	order_by_item
+	{
+		$$ = new std::vector<OrderByItem>;
+		$$->emplace_back(*$1);
+		delete $1;
+	}
+	| order_by_item COMMA order_by_list
+	{
+		if ($3 != nullptr) {
+			$$ = $3;
+		} else {
+			$$ = new std::vector<OrderByItem>;
+		}
+		$$->emplace($$->begin(), *$1);
+		delete $1;
+	}
+	;
+
+order_by_item:
+	rel_attr asc_desc
+	{
+		$$ = new OrderByItem;
+		$$->attr = *$1;
+		$$->asc = $2;
+		delete $1;
+	}
+	;
+
+asc_desc:
+	/* empty */
+	{
+		$$ = true; // default is ascending
+	}
+	| ASC
+	{
+		$$ = true;
+	}
+	| DESC
+	{
+		$$ = false;
+	}
+	;
+
 calc_stmt:
     CALC expression_list
     {
@@ -679,6 +817,68 @@ expression:
       $$ = new StarExpr();
     }
     // your code here
+    // 聚合函数
+    | MAX LBRACE agg_fun_attr_list RBRACE {
+      $$ = create_aggregate_expression("max", $3, sql_string, &@$);
+    }
+    | MIN LBRACE agg_fun_attr_list RBRACE {
+      $$ = create_aggregate_expression("min", $3, sql_string, &@$);
+    }
+    | COUNT LBRACE agg_fun_attr_list RBRACE {
+      $$ = create_aggregate_expression("count", $3, sql_string, &@$);
+    }
+    | AVG LBRACE agg_fun_attr_list RBRACE {
+      $$ = create_aggregate_expression("avg", $3, sql_string, &@$);
+    }
+    | SUM LBRACE agg_fun_attr_list RBRACE {
+      $$ = create_aggregate_expression("sum", $3, sql_string, &@$);
+    }
+    /* | LBRACE select_stmt RBRACE {
+      $$ = create_subquery_expression($2, nullptr, sql_string, &@$);
+    } */
+    /* | LBRACE value value_list RBRACE {
+      std::cout << "jijijijiji" << std::endl;
+      if ($3 != nullptr) {
+        $$ = create_subquery_expression(nullptr, $3, sql_string, &@$);
+      } else {
+        std::vector<Value> *values = new std::vector<Value>();
+        values->emplace_back(*$2);
+        $$ = create_subquery_expression(nullptr, values, sql_string, &@$);
+        delete $2;
+      }
+    } */
+    ;
+agg_fun_attr_list:
+    agg_fun_attr {
+      $$ = $1;
+    }
+    | agg_fun_attr COMMA agg_fun_attr_list {
+      $$ = nullptr;
+      // 到这里肯定有问题
+      if ($3) {
+        delete $3;
+      }
+      if ($1) {
+        delete $1;
+      }
+      yyerror(&@1, NULL, sql_result, NULL, SCF_ERROR_AGGREGATION, "aggregation func has too many fields");
+    }
+    ;
+agg_fun_attr:
+    /* empty */
+    {
+      std::string null_string = "";
+      $$ = new UnboundFieldExpr(null_string, null_string);
+      $$->set_name(null_string);
+    }
+    | '*' {
+      $$ = new StarExpr();
+    }
+    | rel_attr {
+      $$ = new UnboundFieldExpr($1->relation_name, $1->attribute_name);
+      $$->set_name(token_name(sql_string, &@$));
+      delete $1;
+    }
     ;
 
 rel_attr:
@@ -719,6 +919,32 @@ rel_list:
     }
     ;
 
+join_list:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | join join_list {
+      if ($2 == nullptr) {
+        std::vector<std::string> *vs = new std::vector<std::string>;
+        std::vector<std::vector<ConditionSqlNode> *> *vvc = new std::vector<std::vector<ConditionSqlNode> *>;
+        $$ = new std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *>(vs, vvc);
+      } else {
+        $$ = $2;
+      }
+      std::vector<std::string> *vs = std::get<0>(*$$);
+      std::vector<std::vector<ConditionSqlNode> *> *vvc = std::get<1>(*$$);
+      vs->emplace_back(std::get<0>(*$1));
+      vvc->emplace_back(std::get<1>(*$1));
+      delete $1;
+    }
+
+join:
+    INNER JOIN relation ON condition_list {
+      $$ = new std::tuple<std::string, std::vector<ConditionSqlNode> *>($3, $5);
+      free($3);
+    }
+
 where:
     /* empty */
     {
@@ -727,7 +953,7 @@ where:
     | WHERE condition_list {
       $$ = $2;  
     }
-    ;
+
 condition_list:
     /* empty */
     {
@@ -745,7 +971,7 @@ condition_list:
     }
     ;
 condition:
-    rel_attr comp_op value
+    /* rel_attr comp_op value
     {
       $$ = new ConditionSqlNode;
       $$->left_is_attr = 1;
@@ -793,6 +1019,112 @@ condition:
       delete $1;
       delete $3;
     }
+    | */
+    expression comp_op expression// 6. where语句中会出现表达式
+    {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->left_expr = $1;
+      $$->right_expr = $3;
+      $$->comp = $2;
+    }
+    | expression comp_op LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      $$->left_expr = $1;
+      UnboundSubqueryExpr *right_expr = new UnboundSubqueryExpr($4);
+      $$->right_expr = right_expr;
+      $$->comp = $2;
+    }
+    | expression IN_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      $$->left_expr = $1;
+      UnboundSubqueryExpr *right_expr = new UnboundSubqueryExpr($4);
+      $$->right_expr = right_expr;
+      $$->comp = CompOp::IN;
+    }
+    | expression NOT IN_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      $$->left_expr = $1;
+      UnboundSubqueryExpr *right_expr = new UnboundSubqueryExpr($5);
+      $$->right_expr = right_expr;
+      $$->comp = CompOp::NOT_IN;
+    }
+    /* expression 和 (xxx) 的算数比较没有意义，如果xxx是一个数字，则由前一条判定，如果xxx是多个数字，无法比较，直接报错即可 */
+    | expression IN_T LBRACE value value_list RBRACE{
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      $$->left_expr = $1;
+      std::vector<Value> *values;
+      if ($5 != nullptr) {
+        values = $5;
+      } else {
+        values = new std::vector<Value>();
+      }
+      values->emplace_back(*$4);
+      ValueListExpr *right_expr = new ValueListExpr(values);
+      $$->right_expr = right_expr;
+      $$->comp = CompOp::IN;
+    }
+    | expression NOT IN_T LBRACE value value_list RBRACE{
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      $$->left_expr = $1;
+      std::vector<Value> *values;
+      if ($6 != nullptr) {
+        values = $6;
+      } else {
+        values = new std::vector<Value>();
+      }
+      values->emplace_back(*$5);
+      ValueListExpr *right_expr = new ValueListExpr(values);
+      $$->right_expr = right_expr;
+      $$->comp = CompOp::NOT_IN;
+    }
+    | EXISTS_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      DumbExpr *left_expr = new DumbExpr();
+      $$->left_expr = left_expr;
+      UnboundSubqueryExpr *right_expr = new UnboundSubqueryExpr($3);
+      $$->right_expr = right_expr;
+      $$->comp = CompOp::EXISTS;
+    }
+    | NOT EXISTS_T LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      DumbExpr *left_expr = new DumbExpr();
+      $$->left_expr = left_expr;
+      UnboundSubqueryExpr *right_expr = new UnboundSubqueryExpr($4);
+      $$->right_expr = right_expr;
+      $$->comp = CompOp::NOT_EXISTS;
+    }
+    | LBRACE select_stmt RBRACE comp_op expression {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      UnboundSubqueryExpr *left_expr = new UnboundSubqueryExpr($2);
+      $$->left_expr = left_expr;
+      $$->right_expr = $5;
+      $$->comp = $4;
+    }
+    | LBRACE select_stmt RBRACE comp_op LBRACE select_stmt RBRACE {
+      $$ = new ConditionSqlNode;
+      $$->neither = 1;
+      $$->is_subquery = 1;
+      $$->left_expr = new UnboundSubqueryExpr($2);
+      $$->right_expr = new UnboundSubqueryExpr($6);
+      $$->comp = $4;
+    }
     ;
 
 comp_op:
@@ -804,6 +1136,8 @@ comp_op:
     | NE { $$ = NOT_EQUAL; }
     | LK { $$ = LIKE; }
     | NLK {$$ = NOT_LIKE; }
+    | IS_T { $$ = IS; }
+    | IS_NOT_T { $$ = IS_NOT; }
     ;
 
 // your code here
@@ -812,7 +1146,22 @@ group_by:
     {
       $$ = nullptr;
     }
+    /* group by后面可以是表达式 */
+    | GROUP BY expression_list
+    {
+      $$ = $3;
+    }
     ;
+
+having:
+    /* empty */
+    {
+      $$ = nullptr;
+    }
+    | HAVING condition_list {
+      $$ = $2;
+    }
+
 load_data_stmt:
     LOAD DATA INFILE SSS INTO TABLE ID 
     {
@@ -856,7 +1205,7 @@ int sql_parse(const char *s, ParsedSqlResult *sql_result) {
   yyscan_t scanner;
   yylex_init(&scanner);
   scan_string(s, scanner);
-  int result = yyparse(s, sql_result, scanner);
+  int result = yyparse(s, sql_result, scanner, SCF_ERROR);
   yylex_destroy(scanner);
   return result;
 }

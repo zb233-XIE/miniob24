@@ -91,13 +91,14 @@ RC BplusTreeIndex::close()
 RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 { 
   sql_debug("table_name:%s;index_name:%s; fields: %s\n", table_->name(), index_meta_.name(), FieldMeta::attrs_to_str(index_meta_.fields()).c_str());
-  const char *key = make_key(record);
+  bool has_null = false;
+  const char *key = make_key(record, has_null);
   int key_len = index_handler_.file_header().total_attr_length;
 
   if (index_meta_.unique()) {
     std::list<RID> rids;
     index_handler_.get_entry(key, key_len, rids);
-    if (rids.size() > 0) {
+    if (rids.size() > 0 && !has_null) {
       LOG_WARN("Failed to insert entry due to the key is already existed. key:%s", key);
       delete [] key;
       return RC::RECORD_DUPLICATE_KEY;
@@ -111,7 +112,8 @@ RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 
 RC BplusTreeIndex::delete_entry(const char *record, const RID *rid)
 {
-  const char *key = make_key(record);
+  bool has_null = false;
+  const char *key = make_key(record, has_null);
   RC rc = index_handler_.delete_entry(key, rid);
   delete [] key;
   return rc;
@@ -132,12 +134,15 @@ IndexScanner *BplusTreeIndex::create_scanner(
 
 RC BplusTreeIndex::sync() { return index_handler_.sync(); }
 
-const char *BplusTreeIndex::make_key(const char *record)
+const char *BplusTreeIndex::make_key(const char *record, bool &has_null)
 {
   int key_len = index_handler_.file_header().total_attr_length;
   char *key = new char[key_len + sizeof(RID)];
   char *pkey = key;
   for (size_t i = 0; i < field_metas_.size(); ++i) {
+    if (*(uint8_t *)(record + field_metas_[i].offset()) == NULL_MAGIC_NUMBER) {
+      has_null = true;
+    }
     memcpy(pkey, record + field_metas_[i].offset(), field_metas_[i].len());
     pkey += field_metas_[i].len();
   }

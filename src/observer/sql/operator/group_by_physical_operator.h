@@ -51,7 +51,10 @@ protected:
   /// @brief 所有tuple聚合结束后，运算最终结果
   RC evaluate(GroupValueType &group_value);
 
+  /// 如果没有任何tuple参与聚合，需要输出默认值
+  GroupValueType *evaluate_default();
+
 protected:
   std::vector<Expression *> aggregate_expressions_;  /// 聚合表达式
-  std::vector<Expression *> value_expressions_;      /// 计算聚合时的表达式
+  std::vector<Expression *> value_expressions_;      /// 计算聚合时的表达式(即聚合函数括号里的东西)
 };

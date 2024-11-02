@@ -45,12 +45,15 @@ public:
   virtual ~ExpressionBinder() = default;
 
   RC bind_expression(std::unique_ptr<Expression> &expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
+  void set_db(Db *db) { db_ = db; }
 
 private:
   RC bind_star_expression(
       std::unique_ptr<Expression> &star_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
   RC bind_unbound_field_expression(
       std::unique_ptr<Expression> &unbound_field_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
+  RC bind_subquery_expression(
+      std::unique_ptr<Expression> &unbound_subquery_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
   RC bind_field_expression(
       std::unique_ptr<Expression> &field_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
   RC bind_value_expression(
@@ -65,7 +68,12 @@ private:
       std::unique_ptr<Expression> &arithmetic_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
   RC bind_aggregate_expression(
       std::unique_ptr<Expression> &aggregate_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
+  RC bind_valuelist_expression(
+      std::unique_ptr<Expression> &aggregate_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
+  RC bind_dumb_expression(
+      std::unique_ptr<Expression> &aggregate_expr, std::vector<std::unique_ptr<Expression>> &bound_expressions);
 
 private:
   BinderContext &context_;
+  Db *db_;
 };

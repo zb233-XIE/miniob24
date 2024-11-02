@@ -14,15 +14,18 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
-#include <memory>
-#include <string>
-
+#include "common/type/attr_type.h"
+#include "common/type/data_type.h"
 #include "common/value.h"
 #include "storage/field/field.h"
 #include "sql/expr/aggregator.h"
 #include "storage/common/chunk.h"
+#include "sql/operator/logical_operator.h"
 
 class Tuple;
+class LogicalOperator;
+class PhysicalOperator;
+class Stmt;
 
 /**
  * @defgroup Expression
@@ -47,6 +50,11 @@ enum class ExprType
   CONJUNCTION,  ///< 多个表达式使用同一种关系(AND或OR)来联结
   ARITHMETIC,   ///< 算术运算
   AGGREGATION,  ///< 聚合运算
+  SUBQUERY,     ///< 子查询
+  UNBOUND_SUBQUERY,
+  VALUE_LIST,
+  DUMB,
+  BOUND_SUBQUERY,
 };
 
 /**
@@ -237,6 +245,7 @@ public:
 
   void         get_value(Value &value) const { value = value_; }
   const Value &get_value() const { return value_; }
+  const bool  is_null() const { return value_.get_null(); }
 
 private:
   Value value_;
@@ -305,6 +314,8 @@ public:
    * @param value the result of comparison
    */
   RC compare_value(const Value &left, const Value &right, bool &value) const;
+
+  RC compare_value_special(Value &left, Value &right, bool &value) const;
 
   template <typename T>
   RC compare_column(const Column &left, const Column &right, std::vector<uint8_t> &result) const;
@@ -471,4 +482,80 @@ public:
 private:
   Type                        aggregate_type_;
   std::unique_ptr<Expression> child_;
+};
+
+class UnboundSubqueryExpr : public Expression
+{
+public:
+  UnboundSubqueryExpr(ParsedSqlNode *sub_sqlnode);
+  virtual ~UnboundSubqueryExpr() = default;
+
+  ExprType type() const override { return ExprType::UNBOUND_SUBQUERY; }
+  AttrType value_type() const override { return AttrType::UNDEFINED; }
+  RC get_value(const Tuple &tuple, Value &value) const override { return RC::SUCCESS; }
+
+
+  ParsedSqlNode *sub_sqlnode() { return sub_sqlnode_; }
+
+private:
+  ParsedSqlNode *sub_sqlnode_;
+};
+
+class BoundSubqueryExpr : public Expression
+{
+public:
+  BoundSubqueryExpr(Stmt *stmt);
+  virtual ~BoundSubqueryExpr() = default;
+  ExprType type() const override { return ExprType::BOUND_SUBQUERY; }
+  AttrType value_type() const override;
+  RC get_value(const Tuple &tuple, Value &value) const override;
+  RC get_value(const Tuple &tuple);
+
+  vector<Value> &get_results() { return results_; }
+  int get_dim() { return d_; }
+
+
+  Stmt *stmt() { return stmt_;}
+  void set_logical_operator(unique_ptr<LogicalOperator> &logical_oper);
+  void set_physical_operator(unique_ptr<PhysicalOperator> &phy_oper);
+  unique_ptr<LogicalOperator> &get_logical_operator() { return logical_oper_; }
+  void set_trx(Trx *trx) { trx_ = trx; }
+
+private:
+  Stmt *stmt_;
+  unique_ptr<LogicalOperator> logical_oper_;
+  unique_ptr<PhysicalOperator> physical_oper_;
+  vector<Value> results_;
+  int d_; // 读上来每个tuple的维度
+  Trx *trx_;
+};
+
+class ValueListExpr : public Expression
+{
+public:
+  ValueListExpr(std::vector<Value> *values);
+  virtual ~ValueListExpr() = default;
+
+  ExprType type() const override { return ExprType::VALUE_LIST; }
+  AttrType value_type() const override;
+  RC get_value(const Tuple &tuple, Value &value) const override;
+
+  vector<Value> &get_values() { return values_; }
+
+private:
+  std::vector<Value> values_;
+};
+
+class DumbExpr : public Expression
+{
+public:
+  DumbExpr() = default;
+  virtual ~DumbExpr() = default;
+
+  ExprType type() const override { return ExprType::DUMB; }
+  AttrType value_type() const override { return AttrType::UNDEFINED; }
+  RC get_value(const Tuple &tuple, Value &value) const override { return RC::SUCCESS; }
+
+private:
+
 };

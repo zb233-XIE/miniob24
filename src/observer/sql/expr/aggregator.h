@@ -22,8 +22,9 @@ class Aggregator
 public:
   virtual ~Aggregator() = default;
 
-  virtual RC accumulate(const Value &value) = 0;
-  virtual RC evaluate(Value &result)        = 0;
+  virtual RC accumulate(const Value &value)  = 0;
+  virtual RC evaluate(Value &result)         = 0;
+  virtual RC evaluate_default(Value &result) { result = Value((int)0); result.set_null(); return RC::SUCCESS;}
 
 protected:
   Value value_;
@@ -34,4 +35,32 @@ class SumAggregator : public Aggregator
 public:
   RC accumulate(const Value &value) override;
   RC evaluate(Value &result) override;
+};
+
+class MinAggregator : public Aggregator
+{
+public:
+  RC accumulate(const Value &value) override;
+  RC evaluate(Value &result) override;
+};
+class MaxAggregator : public Aggregator
+{
+public:
+  RC accumulate(const Value &value) override;
+  RC evaluate(Value &result) override;
+};
+class CountAggregator : public Aggregator
+{
+public:
+  RC accumulate(const Value &value) override;
+  RC evaluate(Value &result) override;
+  RC evaluate_default(Value &result) override;
+};
+class AvgAggregator : public Aggregator
+{
+public:
+  RC accumulate(const Value &value) override;
+  RC evaluate(Value &result) override;
+private:
+  int count_;
 };

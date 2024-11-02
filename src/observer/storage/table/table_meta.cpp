@@ -80,13 +80,15 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
           field_offset,
           field_meta.len(),
           false /*visible*/,
-          field_meta.field_id());
+          field_meta.field_id(),
+        field_meta.nullable());
       output_fields_[i]           = FieldMeta(field_meta.name(),  // output
           field_meta.type(),
           output_field_offset,
           field_meta.len(),
           false /*visible*/,
-          field_meta.field_id());
+          field_meta.field_id(),
+          field_meta.nullable());
 
       field_offset += field_meta.len();         // input
       output_field_offset += field_meta.len();  // output
@@ -118,14 +120,14 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
     }
     // input
     rc = fields_[i + trx_field_num].init(
-        attr_info.name.c_str(), attr_info.type, field_offset, attr_len, true /*visible*/, i);
+      attr_info.name.c_str(), attr_info.type, field_offset, attr_len, true /*visible*/, i, attr_info.nullable);
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to init field meta. table name=%s, field name: %s", name, attr_info.name.c_str());
       return rc;
     }
     // output
     rc = output_fields_[i + trx_field_num].init(
-        attr_info.name.c_str(), attr_info.type, output_field_offset, output_attr_len, true /*visible*/, i);
+        attr_info.name.c_str(), attr_info.type, output_field_offset, output_attr_len, true /*visible*/, i, attr_info.nullable);
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to init output field meta. table name=%s, field name: %s", name, attr_info.name.c_str());
       return rc;

@@ -28,11 +28,11 @@ class UpdateStmt : public Stmt
 {
 public:
   UpdateStmt() = default;
-  UpdateStmt(Table *table, const std::vector<Value> &values, FilterStmt *filter_stmt, const std::vector<FieldMeta> &fields);
+  UpdateStmt(Table *table, const std::vector<Value> &values, FilterStmt *filter_stmt, const std::vector<FieldMeta> &fields, bool update_internal_error);
   ~UpdateStmt() override;
 
 public:
-  static RC create(Db *db, const UpdateSqlNode &update_sql, Stmt *&stmt);
+  static RC create(Db *db, UpdateSqlNode &update_sql, Stmt *&stmt);
 
 public:
   Table                        *table() const { return table_; }
@@ -40,10 +40,13 @@ public:
   const std::vector<FieldMeta> &fields() const { return fields_; }
   FilterStmt                   *filter_stmt() const { return filter_stmt_; }
   StmtType                      type() const override { return StmtType::UPDATE; }
+  const bool                    update_internal_error() const { return update_internal_error_; }
 
 private:
+  static RC              get_subquery_value(Db *db, ParsedSqlNode *subquery, Value &value, bool &update_internal_error);
   Table                 *table_ = nullptr;
   std::vector<Value>     values_;
   FilterStmt            *filter_stmt_ = nullptr;
   std::vector<FieldMeta> fields_;
+  bool update_internal_error_ = false;
 };

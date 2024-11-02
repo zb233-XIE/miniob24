@@ -48,6 +48,8 @@ extern int atoi();
 extern double atof();
 
 #define RETURN_TOKEN(token) LOG_DEBUG("%s", #token);return token
+
+int last_flag = 0;
 %}
 
 /* Prevent the need for linking with -lfl */
@@ -78,37 +80,52 @@ QUOTE            [\'\"]
 {WHITE_SAPCE}                                        // ignore whitespace
 \n                                                   ;
 
-[\-]?{DIGIT}+                           yylval->number=atoi(yytext); RETURN_TOKEN(NUMBER);
+[\-]?{DIGIT}+                           {\
+                                          if (last_flag && yytext[0] == '-') {\
+                                            yyless(strlen(yytext) - 1);\
+                                            last_flag = 0;\
+                                            return '-';\
+                                          } else {\
+                                            last_flag=1;\
+                                            yylval->number=atoi(yytext);\
+                                            RETURN_TOKEN(NUMBER);\
+                                          }\
+                                        }
 [\-]?{DIGIT}+{DOT}{DIGIT}+              yylval->floats=(float)(atof(yytext)); RETURN_TOKEN(FLOAT);
 {QUOTE}{DIGIT}\-{DIGIT}+\-{DIGIT}+{QUOTE} yylval->date=strdup(yytext); RETURN_TOKEN(DATE);
 
-";"                                     RETURN_TOKEN(SEMICOLON);
+";"                                     last_flag=0;RETURN_TOKEN(SEMICOLON);
 {DOT}                                   RETURN_TOKEN(DOT);
+EXISTS                                  RETURN_TOKEN(EXISTS_T);
+NOT                                     RETURN_TOKEN(NOT);
+IN                                      RETURN_TOKEN(IN_T);
 EXIT                                    RETURN_TOKEN(EXIT);
 HELP                                    RETURN_TOKEN(HELP);
 DESC                                    RETURN_TOKEN(DESC);
-CREATE                                  RETURN_TOKEN(CREATE);
-DROP                                    RETURN_TOKEN(DROP);
-TABLE                                   RETURN_TOKEN(TABLE);
-TABLES                                  RETURN_TOKEN(TABLES);
-INDEX                                   RETURN_TOKEN(INDEX);
-ON                                      RETURN_TOKEN(ON);
-SHOW                                    RETURN_TOKEN(SHOW);
-SYNC                                    RETURN_TOKEN(SYNC);
-SELECT                                  RETURN_TOKEN(SELECT);
-CALC                                    RETURN_TOKEN(CALC);
-FROM                                    RETURN_TOKEN(FROM);
-WHERE                                   RETURN_TOKEN(WHERE);
-AND                                     RETURN_TOKEN(AND);
-INSERT                                  RETURN_TOKEN(INSERT);
-INTO                                    RETURN_TOKEN(INTO);
-VALUES                                  RETURN_TOKEN(VALUES);
-DELETE                                  RETURN_TOKEN(DELETE);
-UPDATE                                  RETURN_TOKEN(UPDATE);
-SET                                     RETURN_TOKEN(SET);
-BEGIN                                   RETURN_TOKEN(TRX_BEGIN);
-COMMIT                                  RETURN_TOKEN(TRX_COMMIT);
-ROLLBACK                                RETURN_TOKEN(TRX_ROLLBACK);
+CREATE                                  last_flag=0;RETURN_TOKEN(CREATE);
+DROP                                    last_flag=0;RETURN_TOKEN(DROP);
+TABLE                                   last_flag=0;RETURN_TOKEN(TABLE);
+TABLES                                  last_flag=0;RETURN_TOKEN(TABLES);
+INDEX                                   last_flag=0;RETURN_TOKEN(INDEX);
+ON                                      last_flag=0;RETURN_TOKEN(ON);
+SHOW                                    last_flag=0;RETURN_TOKEN(SHOW);
+SYNC                                    last_flag=0;RETURN_TOKEN(SYNC);
+SELECT                                  last_flag=0;RETURN_TOKEN(SELECT);
+CALC                                    last_flag=0;RETURN_TOKEN(CALC);
+FROM                                    last_flag=0;RETURN_TOKEN(FROM);
+INNER                                   RETURN_TOKEN(INNER);
+JOIN                                    RETURN_TOKEN(JOIN);
+WHERE                                   last_flag=0;RETURN_TOKEN(WHERE);
+AND                                     last_flag=0;RETURN_TOKEN(AND);
+INSERT                                  last_flag=0;RETURN_TOKEN(INSERT);
+INTO                                    last_flag=0;RETURN_TOKEN(INTO);
+VALUES                                  last_flag=0;RETURN_TOKEN(VALUES);
+DELETE                                  last_flag=0;RETURN_TOKEN(DELETE);
+UPDATE                                  last_flag=0;RETURN_TOKEN(UPDATE);
+SET                                     last_flag=0;RETURN_TOKEN(SET);
+BEGIN                                   last_flag=0;RETURN_TOKEN(TRX_BEGIN);
+COMMIT                                  last_flag=0;RETURN_TOKEN(TRX_COMMIT);
+ROLLBACK                                last_flag=0;RETURN_TOKEN(TRX_ROLLBACK);
 INT                                     RETURN_TOKEN(INT_T);
 CHAR                                    RETURN_TOKEN(STRING_T);
 FLOAT                                   RETURN_TOKEN(FLOAT_T);
@@ -121,33 +138,45 @@ INFILE                                  RETURN_TOKEN(INFILE);
 EXPLAIN                                 RETURN_TOKEN(EXPLAIN);
 GROUP                                   RETURN_TOKEN(GROUP);
 BY                                      RETURN_TOKEN(BY);
+IS                                      RETURN_TOKEN(IS_T);
+"IS NOT"                                RETURN_TOKEN(IS_NOT_T);
+HAVING                                  RETURN_TOKEN(HAVING);
 STORAGE                                 RETURN_TOKEN(STORAGE);
 FORMAT                                  RETURN_TOKEN(FORMAT);
+MAX                                     RETURN_TOKEN(MAX);
+MIN                                     RETURN_TOKEN(MIN);
+COUNT                                   RETURN_TOKEN(COUNT);
+AVG                                     RETURN_TOKEN(AVG);
+SUM                                     RETURN_TOKEN(SUM);
 LIKE                                    RETURN_TOKEN(LK);
 "NOT LIKE"                              RETURN_TOKEN(NLK);
+NULL                                    RETURN_TOKEN(NULL_T);
+"NOT NULL"                              RETURN_TOKEN(NOT_NULL_T);
+"ORDER BY"                              RETURN_TOKEN(ORDER_BY);
+ASC                                     RETURN_TOKEN(ASC);
 UNIQUE                                  RETURN_TOKEN(UNIQUE);
 L2_DISTANCE                             RETURN_TOKEN(L2_DISTANCE);
 COSINE_DISTANCE                         RETURN_TOKEN(COSINE_DISTANCE);
 INNER_PRODUCT                           RETURN_TOKEN(INNER_PRODUCT);
-{ID}                                    yylval->string=strdup(yytext); RETURN_TOKEN(ID);
+{ID}                                    last_flag=1; yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 "("                                     RETURN_TOKEN(LBRACE);
-")"                                     RETURN_TOKEN(RBRACE);
+")"                                     last_flag=1; RETURN_TOKEN(RBRACE);
 "["                                     RETURN_TOKEN(LBRACKET);
 "]"                                     RETURN_TOKEN(RBRACKET);
 
-","                                     RETURN_TOKEN(COMMA);
-"="                                     RETURN_TOKEN(EQ);
-"<="                                    RETURN_TOKEN(LE);
-"<>"                                    RETURN_TOKEN(NE);
-"!="                                    RETURN_TOKEN(NE);
-"<"                                     RETURN_TOKEN(LT);
-">="                                    RETURN_TOKEN(GE);
-">"                                     RETURN_TOKEN(GT);
+","                                     last_flag=0;RETURN_TOKEN(COMMA);
+"="                                     last_flag=0;RETURN_TOKEN(EQ);
+"<="                                    last_flag=0;RETURN_TOKEN(LE);
+"<>"                                    last_flag=0;RETURN_TOKEN(NE);
+"!="                                    last_flag=0;RETURN_TOKEN(NE);
+"<"                                     last_flag=0;RETURN_TOKEN(LT);
+">="                                    last_flag=0;RETURN_TOKEN(GE);
+">"                                     last_flag=0;RETURN_TOKEN(GT);
 
 "+" |
 "-" |
 "*" |
-"/"                                     { return yytext[0]; }
+"/"                                     { last_flag=0; return yytext[0]; }
 \"[^"]*\"                               yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
 '[^']*\'                                yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
 

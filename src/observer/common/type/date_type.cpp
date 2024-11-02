@@ -11,6 +11,11 @@ int DateType::compare(const Value &left, const Value &right) const {
 }
 
 RC DateType::to_string(const Value &val, string &result) const {
+  if (val.get_null()) {
+    result = "NULL";
+    return RC::SUCCESS;
+  }
+
   time_t timestamp = val.get_date();
   char buf[16]; bzero(buf, 16);
   struct tm tm; bzero(&tm, sizeof(tm));

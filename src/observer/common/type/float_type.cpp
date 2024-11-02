@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/value.h"
 #include "common/lang/limits.h"
 #include "common/value.h"
+#include <cmath>
 
 int FloatType::compare(const Value &left, const Value &right) const
 {
@@ -47,6 +48,7 @@ RC FloatType::divide(const Value &left, const Value &right, Value &result) const
     // NOTE:
     // 设置为浮点数最大值是不正确的。通常的做法是设置为NULL，但是当前的miniob没有NULL概念，所以这里设置为浮点数最大值。
     result.set_float(numeric_limits<float>::max());
+    result.set_null();
   } else {
     result.set_float(left.get_float() / right.get_float());
   }
@@ -78,8 +80,29 @@ RC FloatType::set_value_from_str(Value &val, const string &data) const
 
 RC FloatType::to_string(const Value &val, string &result) const
 {
+  if (val.get_null()) {
+    result = "NULL";
+    return RC::SUCCESS;
+  }
+
   stringstream ss;
   ss << common::double_to_str(val.value_.float_value_);
   result = ss.str();
+  return RC::SUCCESS;
+}
+
+RC FloatType::cast_to(const Value &val, AttrType type, Value &result) const {
+  switch (type) {
+    case AttrType::INTS: {
+      result.set_int((int)std::round(val.get_float()));
+    } break;
+
+    case AttrType::CHARS: {
+      char *buffer = new char[64];
+      int nbytes = snprintf(buffer, 64, "%g", val.get_float());
+      result.set_string(buffer, nbytes);
+    } break;
+    default: return RC::UNIMPLEMENTED;
+  }
   return RC::SUCCESS;
 }

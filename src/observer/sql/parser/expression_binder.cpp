@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/string.h"
 #include "sql/parser/expression_binder.h"
 #include "sql/expr/expression_iterator.h"
+#include "sql/stmt/stmt.h"
 
 using namespace std;
 using namespace common;
@@ -40,7 +41,8 @@ static void wildcard_fields(Table *table, vector<unique_ptr<Expression>> &expres
   for (int i = table_meta.sys_field_num(); i < field_num; i++) {
     Field      field(table, table_meta.field(i));
     FieldExpr *field_expr = new FieldExpr(field);
-    field_expr->set_name(field.field_name());
+    // field_expr->set_name(field.field_name());
+    field_expr->set_name(table_meta.name() + std::string(".") + std::string(field.field_name()));
     expressions.emplace_back(field_expr);
   }
 }
@@ -64,6 +66,10 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
       return bind_aggregate_expression(expr, bound_expressions);
     } break;
 
+    case ExprType::UNBOUND_SUBQUERY: {
+      return bind_subquery_expression(expr, bound_expressions);
+    }
+
     case ExprType::FIELD: {
       return bind_field_expression(expr, bound_expressions);
     } break;
@@ -86,6 +92,14 @@ RC ExpressionBinder::bind_expression(unique_ptr<Expression> &expr, vector<unique
 
     case ExprType::ARITHMETIC: {
       return bind_arithmetic_expression(expr, bound_expressions);
+    } break;
+
+    case ExprType::VALUE_LIST: {
+      return bind_valuelist_expression(expr, bound_expressions);
+    } break;
+
+    case ExprType::DUMB: {
+      return bind_dumb_expression(expr, bound_expressions);
     } break;
 
     case ExprType::AGGREGATION: {
@@ -171,7 +185,8 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
     Field      field(table, field_meta);
     FieldExpr *field_expr = new FieldExpr(field);
-    field_expr->set_name(field_name);
+    // field_expr->set_name(field_name); // expression的测试用例显示应该展示完整的名字，而不只是field_name
+    field_expr->set_name(unbound_field_expr->name());
     bound_expressions.emplace_back(field_expr);
   }
 
@@ -189,6 +204,20 @@ RC ExpressionBinder::bind_value_expression(
     unique_ptr<Expression> &value_expr, vector<unique_ptr<Expression>> &bound_expressions)
 {
   bound_expressions.emplace_back(std::move(value_expr));
+  return RC::SUCCESS;
+}
+
+RC ExpressionBinder::bind_valuelist_expression(
+    unique_ptr<Expression> &valuelist_expr, vector<unique_ptr<Expression>> &bound_expressions)
+{
+  bound_expressions.emplace_back(std::move(valuelist_expr));
+  return RC::SUCCESS;
+}
+
+RC ExpressionBinder::bind_dumb_expression(
+    unique_ptr<Expression> &dumb_expr, vector<unique_ptr<Expression>> &bound_expressions)
+{
+  bound_expressions.emplace_back(std::move(dumb_expr));
   return RC::SUCCESS;
 }
 
@@ -327,7 +356,8 @@ RC ExpressionBinder::bind_arithmetic_expression(
   }
 
   if (child_bound_expressions.size() != 1) {
-    LOG_WARN("invalid left children number of comparison expression: %d", child_bound_expressions.size());
+    // LOG_WARN("invalid left children number of comparison expression: %d", child_bound_expressions.size());
+    LOG_WARN("invalid left children number of arithmetic expression: %d", child_bound_expressions.size());
     return RC::INVALID_ARGUMENT;
   }
 
@@ -343,8 +373,13 @@ RC ExpressionBinder::bind_arithmetic_expression(
   }
 
   if (child_bound_expressions.size() != 1) {
-    LOG_WARN("invalid right children number of comparison expression: %d", child_bound_expressions.size());
-    return RC::INVALID_ARGUMENT;
+    if (arithmetic_expr->arithmetic_type() != ArithmeticExpr::Type::NEGATIVE) {
+      // LOG_WARN("invalid right children number of comparison expression: %d", child_bound_expressions.size());
+      LOG_WARN("invalid left children number of arithmetic expression: %d", child_bound_expressions.size());
+      return RC::INVALID_ARGUMENT;
+    }
+    bound_expressions.emplace_back(std::move(expr));
+    return RC::SUCCESS;
   }
 
   unique_ptr<Expression> &right = child_bound_expressions[0];
@@ -447,5 +482,27 @@ RC ExpressionBinder::bind_aggregate_expression(
   }
 
   bound_expressions.emplace_back(std::move(aggregate_expr));
+  return RC::SUCCESS;
+}
+
+RC ExpressionBinder::bind_subquery_expression(
+    unique_ptr<Expression> &expr, vector<unique_ptr<Expression>> &bound_expressions)
+{
+  if (nullptr == expr) {
+    return RC::SUCCESS;
+  }
+
+  auto unbound_subquery_expr = static_cast<UnboundSubqueryExpr *>(expr.get());
+
+  ParsedSqlNode *sub_sqlnode = unbound_subquery_expr->sub_sqlnode();
+
+  // 将ParsedSqlNode转化为stmt
+  Stmt *sub_stmt = nullptr;
+  Stmt::create_stmt(db_, *sub_sqlnode, sub_stmt);
+
+  // 生成新的表达式
+  BoundSubqueryExpr *bound_subquery_expr = new BoundSubqueryExpr(sub_stmt);
+  bound_expressions.emplace_back(bound_subquery_expr);
+
   return RC::SUCCESS;
 }

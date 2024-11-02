@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by WangYunlai on 2024/06/11.
 //
 #include <algorithm>
+#include <memory>
 
 #include "common/log/log.h"
 #include "sql/operator/group_by_physical_operator.h"
@@ -101,4 +102,30 @@ RC GroupByPhysicalOperator::evaluate(GroupValueType &group_value)
   composite_value_tuple.add_tuple(make_unique<ValueListTuple>(std::move(evaluated_tuple)));
 
   return rc;
+}
+
+GroupByPhysicalOperator::GroupValueType *GroupByPhysicalOperator::evaluate_default()
+{
+  vector<TupleCellSpec> aggregator_names;
+  for (Expression *expr : aggregate_expressions_) {
+    aggregator_names.emplace_back(expr->name());
+  }
+
+  AggregatorList aggregator_list;
+  create_aggregator_list(aggregator_list);
+
+  ValueListTuple evaluated_tuple;
+  vector<Value>  values;
+  for (unique_ptr<Aggregator> &aggregator : aggregator_list) {
+    Value value;
+    aggregator->evaluate_default(value);
+    values.emplace_back(value);
+  }
+
+  evaluated_tuple.set_cells(values);
+  evaluated_tuple.set_names(aggregator_names);
+
+  CompositeTuple composite_tuple;
+  composite_tuple.add_tuple(make_unique<ValueListTuple>(std::move(evaluated_tuple)));
+  return new GroupValueType(std::move(aggregator_list), std::move(composite_tuple));
 }

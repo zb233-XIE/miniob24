@@ -13,7 +13,10 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/type/attr_type.h"
 #include "common/type/char_type.h"
+#include "common/type/data_type.h"
 #include "common/value.h"
+#include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -68,6 +71,16 @@ bool CharType::cast_to_vector(char* src, Value& result) const
 RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
 {
   switch (type) {
+    case AttrType::INTS: {
+      int res = atoi(val.get_string().c_str());
+      result = Value((int)res);
+      break;
+    }
+    case AttrType::FLOATS: {
+      float res = atof(val.get_string().c_str());
+      result = Value((float)res);
+      break;
+    }
     case AttrType::VECTORS: {
       char* src = val.value_.pointer_value_;
       if(cast_to_vector(src, result)){
@@ -100,11 +113,22 @@ int CharType::cast_cost(AttrType type)
   } else if(type == AttrType::VECTORS){
     return 1;
   }
+  if (type == AttrType::INTS) { // char转可以转int
+    return 0;
+  }
+  if (type == AttrType::FLOATS) { // char可以转float
+    return 0;
+  }
   return INT32_MAX;
 }
 
 RC CharType::to_string(const Value &val, string &result) const
 {
+  if (val.get_null()) {
+    result = "NULL";
+    return RC::SUCCESS;
+  }
+
   stringstream ss;
   int len = 0;
   while(len < val.length_ && *(val.value_.pointer_value_ + len) != '\0') len++;
