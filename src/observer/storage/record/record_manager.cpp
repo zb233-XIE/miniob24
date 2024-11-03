@@ -1151,7 +1151,6 @@ RC RecordFileScanner::fetch_next_record()
 RC RecordFileScanner::fetch_next_record_in_page()
 {
   RC rc = RC::SUCCESS;
-  next_record_.~Record();
   while (record_page_iterator_.has_next()) {
     next_record_.~Record();
     rc = record_page_iterator_.next(next_record_);
