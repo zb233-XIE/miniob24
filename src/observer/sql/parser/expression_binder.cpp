@@ -13,12 +13,15 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include <algorithm>
+#include <cstdint>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
 #include "sql/parser/expression_binder.h"
 #include "sql/expr/expression_iterator.h"
 #include "sql/stmt/stmt.h"
+#include "sql/stmt/select_stmt.h"
+#include "storage/table/table.h"
 
 using namespace std;
 using namespace common;
@@ -28,6 +31,16 @@ Table *BinderContext::find_table(const char *table_name) const
   auto pred = [table_name](Table *table) { return 0 == strcasecmp(table_name, table->name()); };
   auto iter = ranges::find_if(query_tables_, pred);
   if (iter == query_tables_.end()) {
+    return nullptr;
+  }
+  return *iter;
+}
+
+Table *BinderContext::find_table_in_helper_tables(const char *table_name) const
+{
+  auto pred = [table_name](Table *table) { return 0 == strcasecmp(table_name, table->name()); };
+  auto iter = ranges::find_if(helper_tables_, pred);
+  if (iter == helper_tables_.end()) {
     return nullptr;
   }
   return *iter;
@@ -169,8 +182,12 @@ RC ExpressionBinder::bind_unbound_field_expression(
   } else {
     table = context_.find_table(table_name);
     if (nullptr == table) {
-      LOG_INFO("no such table in from list: %s", table_name);
-      return RC::SCHEMA_TABLE_NOT_EXIST;
+      // query tables中没有找到，还可以去helper tables中找
+      table = context_.find_table_in_helper_tables(table_name);
+      if (nullptr == table) {
+        LOG_INFO("no such table in from list: %s", table_name);
+        return RC::SCHEMA_TABLE_NOT_EXIST;
+      }
     }
   }
 
@@ -497,8 +514,18 @@ RC ExpressionBinder::bind_subquery_expression(
   ParsedSqlNode *sub_sqlnode = unbound_subquery_expr->sub_sqlnode();
 
   // 将ParsedSqlNode转化为stmt
-  Stmt *sub_stmt = nullptr;
-  Stmt::create_stmt(db_, *sub_sqlnode, sub_stmt);
+  SelectStmt *sub_stmt = new SelectStmt();
+  auto &query_tables = context_.query_tables();
+  auto &helper_table = context_.helper_tables();
+  vector<Table *> tables;
+  for (Table *table : query_tables) {
+    tables.push_back(table);
+  }
+  for (Table *table : helper_table) {
+    tables.push_back(table);
+  }
+  sub_stmt->set_tables(tables);
+  Stmt::create_stmt(db_, *sub_sqlnode, reinterpret_cast<Stmt*&>(sub_stmt));
 
   // 生成新的表达式
   BoundSubqueryExpr *bound_subquery_expr = new BoundSubqueryExpr(sub_stmt);

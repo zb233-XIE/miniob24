@@ -48,7 +48,7 @@ bool stmt_type_ddl(StmtType type)
 }
 RC Stmt::create_stmt(Db *db, ParsedSqlNode &sql_node, Stmt *&stmt)
 {
-  stmt = nullptr;
+  // stmt = nullptr;
 
   switch (sql_node.flag) {
     case SCF_INSERT: {

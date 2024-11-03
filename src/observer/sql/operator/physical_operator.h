@@ -20,6 +20,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 #include "sql/expr/tuple.h"
+#include "sql/expr/composite_tuple.h"
 
 class Record;
 class TupleCellSpec;
@@ -93,6 +94,17 @@ public:
 
   std::vector<std::unique_ptr<PhysicalOperator>> &children() { return children_; }
 
+  void helper_tuples_pushdown();
+
+  void add_helper_tuple(const Tuple *tuple);
+
+  void add_helper_tuples(std::vector<const Tuple *> &tuples);
+
+  void helper_tuple_clear_rec();
+
+  std::vector<const Tuple *> &get_helper_tuples();
+
 protected:
   std::vector<std::unique_ptr<PhysicalOperator>> children_;
+  std::vector<const Tuple *> helper_tuples_;
 };

@@ -245,6 +245,7 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
 
   unique_ptr<Expression> expression = std::move(expressions.front());
   // 为子查询generate physical plan
+  vector<Expression *> ok_raw_exprs;
   if (expression->type() == ExprType::CONJUNCTION) {
     auto conj_expr = static_cast<ConjunctionExpr *>(expression.get());
     std::vector<std::unique_ptr<Expression>> &exprs = conj_expr->children();
@@ -258,9 +259,11 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
       auto &right_expr = raw_expr->right();
       if (left_expr->type() == ExprType::BOUND_SUBQUERY) {
         create_subquery_physical_plan(left_expr);
+        ok_raw_exprs.push_back(left_expr.get());
       }
       if (right_expr->type() == ExprType::BOUND_SUBQUERY) {
         create_subquery_physical_plan(right_expr);
+        ok_raw_exprs.push_back(right_expr.get());
       }
     }
   } else if (expression->type() == ExprType::COMPARISON) {
@@ -270,14 +273,22 @@ RC PhysicalPlanGenerator::create_plan(PredicateLogicalOperator &pred_oper, uniqu
     auto &right_expr = comp_expr->right();
     if (left_expr->type() == ExprType::BOUND_SUBQUERY) {
       create_subquery_physical_plan(left_expr);
+      ok_raw_exprs.push_back(left_expr.get());
     }
     if (right_expr->type() == ExprType::BOUND_SUBQUERY) {
       create_subquery_physical_plan(right_expr);
+      ok_raw_exprs.push_back(right_expr.get());
     }
   }
 
   oper = unique_ptr<PhysicalOperator>(new PredicatePhysicalOperator(std::move(expression)));
   oper->add_child(std::move(child_phy_oper));
+
+  // BoundSubqueryExpr中需要当前predicate operator的信息
+  for (Expression *ok_raw_expr : ok_raw_exprs) {
+    ((BoundSubqueryExpr *)ok_raw_expr)->set_current_physical_operator(oper.get());
+  }
+
   return rc;
 }
 
