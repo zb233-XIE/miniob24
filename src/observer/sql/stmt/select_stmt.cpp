@@ -60,7 +60,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   if (stmt != nullptr) {
     SelectStmt *select_stmt = static_cast<SelectStmt *>(stmt);
     for (Table *t : select_stmt->tables()) {
-      binder_context.add_table(t);
+      binder_context.add_helper_table(t);
     }
     delete stmt;
     stmt = nullptr;

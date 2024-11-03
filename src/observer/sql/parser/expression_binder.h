@@ -26,12 +26,19 @@ public:
 
   void add_table(Table *table) { query_tables_.push_back(table); }
 
+  void add_helper_table(Table *table) { helper_tables_.push_back(table); }
+
   Table *find_table(const char *table_name) const;
+
+  Table *find_table_in_helper_tables(const char *table_name) const;
 
   const std::vector<Table *> &query_tables() const { return query_tables_; }
 
+  const std::vector<Table *> &helper_tables() const { return helper_tables_; }
+
 private:
   std::vector<Table *> query_tables_;
+  std::vector<Table *> helper_tables_;
 };
 
 /**

@@ -828,18 +828,26 @@ RC BoundSubqueryExpr::get_value(const Tuple &tuple)
   // 2. 设置默认维度：1维
   d_ = 1;
   RC rc = physical_oper_->open(trx_);
-  ASSERT(rc == RC::SUCCESS, "ERROR"); // debug
+  // 这里有可能会出错，比如带聚合函数的查询在open阶段就会开始读tuple
   if (rc != RC::SUCCESS) {
+    physical_oper_->close();
     LOG_WARN("failed to open subquery operator. rc=%s", strrc(rc));
     return rc;
   }
-  while (OB_SUCC(physical_oper_->next())) { // 把所有tuple读上来
+  while (OB_SUCC(rc = physical_oper_->next())) { // 把所有tuple读上来
     Tuple *tuple = physical_oper_->current_tuple();
     d_ = tuple->cell_num();
     Value v;
     tuple->cell_at(0, v);
     results_.emplace_back(v);
   }
+  // 这里有可能会出错，只允许接受RC::RECORD_EOF
+  if (OB_FAIL(rc) && rc != RC::RECORD_EOF) {
+    physical_oper_->close();
+    LOG_WARN("failed to get next tuple in BoundSubqueryExpr. rc=%s", strrc(rc));
+    return rc;
+  }
+  
   rc = physical_oper_->close();
   ASSERT(rc == RC::SUCCESS, "ERROR"); // debug
   if (rc != RC::SUCCESS) {
