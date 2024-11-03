@@ -87,7 +87,8 @@ RC TableMeta::init(int32_t table_id, const char *name, const std::vector<FieldMe
           output_field_offset,
           field_meta.len(),
           false /*visible*/,
-          field_meta.field_id());
+          field_meta.field_id(),
+          field_meta.nullable());
 
       field_offset += field_meta.len();         // input
       output_field_offset += field_meta.len();  // output

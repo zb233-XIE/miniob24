@@ -99,7 +99,7 @@ RC FloatType::cast_to(const Value &val, AttrType type, Value &result) const {
 
     case AttrType::CHARS: {
       char *buffer = new char[64];
-      int nbytes = sprintf(buffer, "%g", val.get_float());
+      int nbytes = snprintf(buffer, 64, "%g", val.get_float());
       result.set_string(buffer, nbytes);
     } break;
     default: return RC::UNIMPLEMENTED;

@@ -445,13 +445,13 @@ attr_def:
     $$->type = (AttrType)$2;
     $$->name = $1;
     if ((AttrType)$2 == AttrType::DATES) {
-    $$->length = 8;
+      $$->length = 8;
     } else if ((AttrType)$2 == AttrType::CHARS) {
     $$->length = 32;
       } else if ((AttrType)$2 == AttrType::TEXTS) {
         $$->length = LOB_OVERFLOW_THRESHOLD;
     } else {
-    $$->length = 4;
+      $$->length = 4;
     }
     $$->nullable = $3;
     free($1);
