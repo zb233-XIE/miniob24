@@ -44,6 +44,7 @@ enum class LogicalOperatorType
   GROUP_BY,    ///< 分组
   DUMB,
   ORDER_BY,    ///< 排序
+  VIEW_GET,    ///< 从视图中获取数据
 };
 
 /**

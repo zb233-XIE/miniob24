@@ -716,3 +716,5 @@ RC Table::sync()
   LOG_INFO("Sync table over. table=%s", name());
   return rc;
 }
+
+Table::Table(View *view) : view_(view) {}

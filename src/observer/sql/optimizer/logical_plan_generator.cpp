@@ -28,6 +28,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/table_get_logical_operator.h"
 #include "sql/operator/group_by_logical_operator.h"
 #include "sql/operator/order_by_logical_operator.h"
+#include "sql/operator/view_get_logical_operator.h"
 
 #include "sql/parser/parse_defs.h"
 #include "sql/operator/update_logical_operator.h"
@@ -116,7 +117,26 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   const std::vector<Table *> &tables = select_stmt->tables();
   for (Table *table : tables) {
 
-    unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_ONLY));
+    unique_ptr<LogicalOperator> table_get_oper;
+    if (table->view() == nullptr) {
+      table_get_oper = make_unique<TableGetLogicalOperator>(table, ReadWriteMode::READ_ONLY);
+    } else {
+      table_get_oper = make_unique<ViewGetLogicalOperator>(table->view(), ReadWriteMode::READ_ONLY);
+      std::unique_ptr<LogicalOperator> view_get_sub_oper;
+      SelectStmt *stmt;
+      RC rc = table->view()->create_select_stmt(stmt);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create view get sub logical operator. rc=%s", strrc(rc));
+        return rc;
+      }
+      rc = create_plan(stmt, view_get_sub_oper);
+      if (rc != RC::SUCCESS) {
+        LOG_WARN("failed to create view get sub logical operator. rc=%s", strrc(rc));
+        return rc;
+      }
+      table_get_oper->add_child(std::move(view_get_sub_oper));
+    }
+
     if (table_oper == nullptr) {
       table_oper = std::move(table_get_oper);
     } else {

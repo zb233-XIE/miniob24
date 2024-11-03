@@ -47,11 +47,15 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/scalar_group_by_physical_operator.h"
 #include "sql/operator/table_scan_vec_physical_operator.h"
 #include "sql/operator/update_physical_operator.h"
+#include "sql/optimizer/logical_plan_generator.h"
 #include "sql/optimizer/physical_plan_generator.h"
 #include "sql/operator/dumb_logical_operator.h"
 #include "sql/operator/dumb_physical_operator.h"
 #include "sql/parser/parse_defs.h"
 #include "sql/operator/order_by_physical_operator.h"
+#include "sql/operator/view_get_logical_operator.h"
+#include "sql/operator/view_get_physical_operator.h"
+#include "sql/stmt/select_stmt.h"
 
 using namespace std;
 
@@ -106,6 +110,10 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
 
     case LogicalOperatorType::ORDER_BY: {
       return create_plan(static_cast<OrderByLogicalOperator &>(logical_operator), oper);
+    } break;
+
+    case LogicalOperatorType::VIEW_GET: {
+      return create_plan(static_cast<ViewGetLogicalOperator &>(logical_operator), oper);
     } break;
 
     default: {
@@ -495,6 +503,22 @@ RC PhysicalPlanGenerator::create_plan(OrderByLogicalOperator &logical_oper, std:
     return rc;
   }
   oper->add_child(std::move(child_physical_oper));
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(ViewGetLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
+{
+  RC rc = RC::SUCCESS;
+  LogicalOperator &child_oper = *logical_oper.children().front();
+  unique_ptr<PhysicalOperator> child_physical_oper;
+  rc = create(child_oper, child_physical_oper);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create child physical operator of order by operator. rc=%s", strrc(rc));
+    return rc;
+  }
+  oper = make_unique<ViewGetPhysicalOperator>();
+  oper->add_child(std::move(child_physical_oper));
+
   return rc;
 }
 

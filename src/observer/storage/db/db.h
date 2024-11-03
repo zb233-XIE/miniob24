@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/memory.h"
 #include "common/lang/span.h"
 #include "sql/parser/parse_defs.h"
+#include "sql/stmt/select_stmt.h"
 #include "storage/buffer/disk_buffer_pool.h"
 #include "storage/clog/disk_log_handler.h"
 #include "storage/buffer/double_write_buffer.h"
@@ -65,6 +66,8 @@ public:
    */
   RC create_table(const char *table_name, span<const AttrInfoSqlNode> attributes,
       const StorageFormat storage_format = StorageFormat::ROW_FORMAT);
+
+  RC create_view(const char *view_name, const vector<string> &col_names, std::string select_sql_str);
 
   RC drop_table(const char *table_name);
 

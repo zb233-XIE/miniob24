@@ -125,17 +125,18 @@ extern int yydebug;
     EXISTS_T = 326,                /* EXISTS_T  */
     NOT = 327,                     /* NOT  */
     IN_T = 328,                    /* IN_T  */
-    NULL_T = 329,                  /* NULL_T  */
-    NOT_NULL_T = 330,              /* NOT_NULL_T  */
-    ORDER_BY = 331,                /* ORDER_BY  */
-    ASC = 332,                     /* ASC  */
-    AS = 333,                      /* AS  */
-    NUMBER = 334,                  /* NUMBER  */
-    FLOAT = 335,                   /* FLOAT  */
-    ID = 336,                      /* ID  */
-    SSS = 337,                     /* SSS  */
-    DATE = 338,                    /* DATE  */
-    UMINUS = 339                   /* UMINUS  */
+    VIEW = 329,                    /* VIEW  */
+    NULL_T = 330,                  /* NULL_T  */
+    NOT_NULL_T = 331,              /* NOT_NULL_T  */
+    ORDER_BY = 332,                /* ORDER_BY  */
+    ASC = 333,                     /* ASC  */
+    AS = 334,                      /* AS  */
+    NUMBER = 335,                  /* NUMBER  */
+    FLOAT = 336,                   /* FLOAT  */
+    ID = 337,                      /* ID  */
+    SSS = 338,                     /* SSS  */
+    DATE = 339,                    /* DATE  */
+    UMINUS = 340                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -168,6 +169,7 @@ union YYSTYPE
   std::vector<RelationSqlNode> *             relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
   std::vector<float> *                       vector_elem_list;
+  std::vector<std::string> *                 id_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -175,7 +177,7 @@ union YYSTYPE
   bool                                       nullable_spec;
   bool                                       asc_desc;
 
-#line 179 "yacc_sql.hpp"
+#line 181 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -156,6 +156,7 @@ NULL                                    RETURN_TOKEN(NULL_T);
 ASC                                     RETURN_TOKEN(ASC);
 UNIQUE                                  RETURN_TOKEN(UNIQUE);
 AS                                      RETURN_TOKEN(AS);
+VIEW                                    RETURN_TOKEN(VIEW);
 L2_DISTANCE                             RETURN_TOKEN(L2_DISTANCE);
 COSINE_DISTANCE                         RETURN_TOKEN(COSINE_DISTANCE);
 INNER_PRODUCT                           RETURN_TOKEN(INNER_PRODUCT);

@@ -154,7 +154,7 @@ bool is_valid_date(const char *date) {
         EXISTS_T
         NOT
         IN_T
-
+        VIEW
         NULL_T
         NOT_NULL_T
 				ORDER_BY
@@ -185,6 +185,7 @@ bool is_valid_date(const char *date) {
   std::vector<RelationSqlNode> *             relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
   std::vector<float> *                       vector_elem_list;
+  std::vector<std::string> *                 id_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -231,6 +232,7 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            update_stmt
 %type <sql_node>            delete_stmt
 %type <sql_node>            create_table_stmt
+%type <sql_node>            create_view_stmt
 %type <sql_node>            drop_table_stmt
 %type <sql_node>            show_tables_stmt
 %type <sql_node>            desc_table_stmt
@@ -246,6 +248,8 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
 %type <sql_node>            command_wrapper
+%type <sql_node>            as_select
+%type <id_list>             id_list
 %type <set_clause>          set_clause
 %type <set_clause_list>     set_clause_list
 %type <nullable_spec>       nullable_spec
@@ -277,6 +281,7 @@ command_wrapper:
   | update_stmt
   | delete_stmt
   | create_table_stmt
+  | create_view_stmt
   | drop_table_stmt
   | show_tables_stmt
   | desc_table_stmt
@@ -292,6 +297,29 @@ command_wrapper:
   | help_stmt
   | exit_stmt
     ;
+
+id_list:
+  {
+    $$ = nullptr;
+  }
+  | ID {
+    $$ = new std::vector<std::string>;
+    $$->emplace_back($1);
+    free($1);
+  }
+  | ID COMMA id_list {
+    if ($3 != nullptr) {
+      $$ = $3;
+    } else {
+      $$ = new std::vector<std::string>;
+    }
+    $$->emplace($$->begin(), $1);
+    free($1);
+  }
+  | LBRACE id_list RBRACE {
+    $$ = $2;
+  }
+  ;
 
 exit_stmt:      
     EXIT {
@@ -399,31 +427,20 @@ drop_index_stmt:      /*drop index 语句的语法解析树*/
       free($5);
     }
     ;
+
+as_select:
+  {
+    $$ = nullptr;
+  }
+  | AS select_stmt {
+    $$ = $2;
+  }
+  | select_stmt {
+    $$ = $1;
+  }
+
 create_table_stmt:    /*create table 语句的语法解析树*/
-    CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE storage_format
-    {
-      $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
-      CreateTableSqlNode &create_table = $$->create_table;
-      create_table.relation_name = $3;
-      free($3);
-
-      std::vector<AttrInfoSqlNode> *src_attrs = $6;
-
-      if (src_attrs != nullptr) {
-        create_table.attr_infos.swap(*src_attrs);
-        delete src_attrs;
-      }
-      create_table.attr_infos.emplace_back(*$5);
-      std::reverse(create_table.attr_infos.begin(), create_table.attr_infos.end());
-      delete $5;
-      if ($8 != nullptr) {
-        create_table.storage_format = $8;
-        free($8);
-      }
-      create_table.has_subquery = false;
-      create_table.subquery = nullptr;
-    }
-    | CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE storage_format select_stmt
+    CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE storage_format as_select
     {
       $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
       CreateTableSqlNode &create_table = $$->create_table;
@@ -452,16 +469,33 @@ create_table_stmt:    /*create table 语句的语法解析树*/
         create_table.subquery = nullptr;
       }
     }
-    | CREATE TABLE ID AS select_stmt
-    {
+    | CREATE TABLE ID as_select {
       $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
       CreateTableSqlNode &create_table = $$->create_table;
       create_table.relation_name = $3;
       free($3);
-      create_table.has_subquery = true;
-      create_table.subquery = $5;
+      if ($4 != nullptr) {
+        create_table.has_subquery = true;
+        create_table.subquery = $4;
+      } else {
+        create_table.has_subquery = false;
+        create_table.subquery = nullptr;
+      }
     }
-    ;
+
+create_view_stmt:
+  CREATE VIEW ID id_list AS select_stmt {
+    $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+    $$->create_view.view_name = $3;
+    free($3);
+    if ($4 != nullptr) {
+      $$->create_view.col_names.swap(*$4);
+      delete $4;
+    }
+    $$->create_view.selection = $6;
+    $$->create_view.sql_str = $6->sql_str;
+  }
+
 attr_def_list:
     /* empty */
     {
@@ -700,6 +734,7 @@ select_stmt:        /*  select 语句的语法解析树*/
     SELECT expression_list FROM rel_list join_list where group_by having order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
+      $$->sql_str = token_name(sql_string, &@$);
       if ($2 != nullptr) {
         $$->selection.expressions.swap(*$2);
         delete $2;

@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "storage/record/record.h"
 #include "storage/table/table_meta.h"
+#include "storage/table/view.h"
 #include "common/types.h"
 #include "common/lang/span.h"
 #include "common/lang/functional.h"
@@ -122,6 +123,9 @@ public:
 
   RC sync();
 
+  explicit Table(View *view);
+  View *view() const { return view_; }
+
 private:
   RC insert_entry_of_indexes(const char *record, const RID &rid);
   RC delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists);
@@ -144,4 +148,5 @@ private:
   RecordFileHandler *record_handler_ = nullptr;  /// 记录操作
   vector<Index *>    indexes_;
   std::string        alias_;
+  View               *view_ = nullptr;
 };

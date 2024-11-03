@@ -129,6 +129,7 @@ struct SelectSqlNode
   std::vector<OrderByItem>                 order_by;     ///< order by clause
   std::vector<std::string>                     join_relations; /// 参与join的表
   std::vector<std::vector<ConditionSqlNode> *> join_conditions; /// join两表之间的条件
+  std::string                                  sql_str;
 };
 
 /**
@@ -208,6 +209,13 @@ struct CreateTableSqlNode
   std::string                  storage_format;  ///< storage format
   bool has_subquery;                            ///< 是否有select子查询
   ParsedSqlNode *subquery;                      ///< select子查询
+};
+
+struct CreateViewSqlNode {
+  std::string view_name;
+  std::vector<std::string> col_names;
+  ParsedSqlNode *selection;
+  std::string sql_str;
 };
 
 /**
@@ -315,6 +323,7 @@ enum SqlCommandFlag
   SCF_UPDATE,
   SCF_DELETE,
   SCF_CREATE_TABLE,
+  SCF_CREATE_VIEW,
   SCF_DROP_TABLE,
   SCF_CREATE_INDEX,
   SCF_DROP_INDEX,
@@ -353,7 +362,8 @@ public:
   LoadDataSqlNode     load_data;
   ExplainSqlNode      explain;
   SetVariableSqlNode  set_variable;
-
+  CreateViewSqlNode   create_view;
+  std::string         sql_str;
 public:
   ParsedSqlNode();
   explicit ParsedSqlNode(SqlCommandFlag flag);
