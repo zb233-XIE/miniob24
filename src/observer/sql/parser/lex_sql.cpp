@@ -1522,7 +1522,6 @@ YY_RULE_SETUP
 RETURN_TOKEN(L2_DISTANCE);
 	YY_BREAK
 case 71:
-/* rule 71 can match eol */
 YY_RULE_SETUP
 #line 152 "lex_sql.l"
 yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
