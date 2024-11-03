@@ -1151,8 +1151,8 @@ RC RecordFileScanner::fetch_next_record()
 RC RecordFileScanner::fetch_next_record_in_page()
 {
   RC rc = RC::SUCCESS;
-  next_record_.~Record();
   while (record_page_iterator_.has_next()) {
+    next_record_.~Record();
     rc = record_page_iterator_.next(next_record_);
     if (rc != RC::SUCCESS) {
       const auto page_num = record_page_handler_->get_page_num();
@@ -1205,6 +1205,7 @@ RC RecordFileScanner::expand_lob_fields()
     int current_offset       = 0;
     int output_record_offset = 0;
 
+    next_record_.set_owner(false);
     next_record_.new_record(table_meta.output_record_size());
     char *output_data = next_record_.data();
 
