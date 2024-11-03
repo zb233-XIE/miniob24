@@ -300,7 +300,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
     if (field->type() == AttrType::VECTORS && value.attr_type() == AttrType::VECTORS) {
       int dim = table_meta_.out_field(i + normal_field_start_index)->len() / sizeof(float);
       if (dim != value.length()) {  // dimension mismatch
-        LOG_WARN("wrong dimension, required: %d, get: %d", dim, values->length());
+        LOG_WARN("wrong dimension, required: %d, get: %d", dim, value.length());
         return RC::INVALID_ARGUMENT;
       }
     }
