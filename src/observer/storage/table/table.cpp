@@ -432,8 +432,8 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     memcpy(record_data + field->offset(), value.data(), copy_len);
   }
 
-    return RC::SUCCESS;
-  }
+  return RC::SUCCESS;
+}
 
 RC Table::init_record_handler(const char *base_dir)
 {
