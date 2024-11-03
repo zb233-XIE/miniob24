@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <limits.h>
 #include <string.h>
+#include <utility>
 
 #include "common/defs.h"
 #include "common/lang/string.h"
@@ -294,11 +295,11 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
 
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &    value = values[i];
+    const Value     &value = values[i];
 
-    if(field->type() == AttrType::VECTORS && value.attr_type() == AttrType::VECTORS){
+    if (field->type() == AttrType::VECTORS && value.attr_type() == AttrType::VECTORS) {
       int dim = table_meta_.out_field(i + normal_field_start_index)->len() / sizeof(float);
-      if(dim != value.length()){ // dimension mismatch
+      if (dim != value.length()) {  // dimension mismatch
         LOG_WARN("wrong dimension, required: %d, get: %d", dim, values->length());
         return RC::INVALID_ARGUMENT;
       }
@@ -334,7 +335,7 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   return RC::SUCCESS;
 }
 
-RC Table::make_record_lob_anno(int value_num, const Value *values, Record_LOB_ANNO &record_lob_anno)
+RC Table::make_record_lob_anno(int value_num, Value *values, Record_LOB_ANNO &record_lob_anno)
 {
   RC rc = RC::SUCCESS;
   record_lob_anno.init(value_num);
@@ -342,18 +343,26 @@ RC Table::make_record_lob_anno(int value_num, const Value *values, Record_LOB_AN
   const int normal_field_start_index = table_meta_.sys_field_num();
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value     &value = values[i];
+    Value     &value = values[i];
     Field_LOB_ANNO   field_anno;
     if (field->type() == AttrType::TEXTS || field->type() == AttrType::VECTORS) {
       field_anno.set_lob_field();
-      size_t field_len = field->len() - sizeof(PageNum);
-      int    value_len = value.length();
-      if(field->type() != value.attr_type()){
+
+      int         value_len = value.length();
+      size_t      field_len = field->len() - sizeof(PageNum);
+
+      if (field->type() != value.attr_type()) {
+        // CHAR -> VECTOR
+        // CHAR -> TEXT
         Value real_value;
-        rc = Value::cast_to(value, field->type(), real_value);
-        value_len = real_value.length();
+        rc        = Value::cast_to(value, field->type(), real_value);
+        if(field->type() == AttrType::VECTORS){
+          value = std::move(real_value);
+          value_len = value.length();
+        }
       }
-      if(field->type() == AttrType::VECTORS){
+
+      if (field->type() == AttrType::VECTORS) {
         value_len *= sizeof(float);
       }
       if (field_len < value_len) {
@@ -396,7 +405,7 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
 
   if (value.get_null() == 1) {
     // set value to null magic number
-    *(uint8_t*)(record_data + field->offset()) = NULL_MAGIC_NUMBER;
+    *(uint8_t *)(record_data + field->offset()) = NULL_MAGIC_NUMBER;
   } else {
     memcpy(record_data + field->offset(), value.data(), copy_len);
   }

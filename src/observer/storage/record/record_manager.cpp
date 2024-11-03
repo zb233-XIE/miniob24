@@ -1229,7 +1229,7 @@ RC RecordFileScanner::expand_lob_fields()
         if(field->type() == AttrType::TEXTS){
           in_field_len = strnlen(data + field->offset(), LOB_OVERFLOW_THRESHOLD - sizeof(PageNum));
         } else {
-          in_field_len = std::min(static_cast<size_t>(field->len()), (LOB_VECTOR_OVERFLOW_DIM - 1) * sizeof(float));
+          in_field_len = std::min(static_cast<size_t>(field->len()) - sizeof(PageNum), (LOB_VECTOR_OVERFLOW_DIM - 1) * sizeof(float));
         }
 
         // get meta data from overflow first_page

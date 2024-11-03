@@ -31,8 +31,8 @@ enum class AttrType
 };
 
 static constexpr int LOB_OVERFLOW_THRESHOLD = 1000 + sizeof(PageNum);
-// static constexpr int LOB_VECTOR_OVERFLOW_DIM = (LOB_OVERFLOW_THRESHOLD / sizeof(float)) - 1;
-static constexpr int LOB_VECTOR_OVERFLOW_DIM = 4;  // dim >= LOB_VECTOR_OVERFLOW_DIM
+static constexpr int LOB_VECTOR_OVERFLOW_DIM = (LOB_OVERFLOW_THRESHOLD / sizeof(float));
+// static constexpr int LOB_VECTOR_OVERFLOW_DIM = 4;  // dim >= LOB_VECTOR_OVERFLOW_DIM
 static constexpr int LOB_MAX_SIZE            = UINT16_MAX;
 static constexpr int LOB_VECTOR_MAX_DIM      = 16000;
 

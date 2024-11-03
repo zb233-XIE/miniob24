@@ -73,7 +73,7 @@ public:
    */
   RC make_record(int value_num, const Value *values, Record &record);
 
-  RC make_record_lob_anno(int value_num, const Value *values, Record_LOB_ANNO &record_lob_anno);
+  RC make_record_lob_anno(int value_num, Value *values, Record_LOB_ANNO &record_lob_anno);
 
   /**
    * @brief 在当前的表中插入一条记录
