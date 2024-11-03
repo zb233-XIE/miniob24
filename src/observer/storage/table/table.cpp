@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <limits.h>
 #include <string.h>
+#include <utility>
 
 #include "common/defs.h"
 #include "common/lang/string.h"
@@ -21,14 +22,21 @@ See the Mulan PSL v2 for more details. */
 #include "common/lang/algorithm.h"
 #include "common/log/log.h"
 #include "common/global_context.h"
+#include "common/rc.h"
+#include "common/type/attr_type.h"
+#include "common/types.h"
+#include "storage/buffer/page.h"
 #include "storage/db/db.h"
 #include "storage/buffer/disk_buffer_pool.h"
 #include "storage/common/condition_filter.h"
 #include "storage/common/meta_util.h"
+#include "storage/field/field_meta.h"
 #include "storage/index/bplus_tree_index.h"
 #include "storage/index/index.h"
+#include "storage/record/record.h"
 #include "storage/record/record_manager.h"
 #include "storage/table/table.h"
+#include "storage/table/table_meta.h"
 #include "storage/trx/trx.h"
 
 Table::~Table()
@@ -157,9 +165,9 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
 
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
-    const IndexMeta *index_meta = table_meta_.index(i);
+    const IndexMeta       *index_meta = table_meta_.index(i);
     std::vector<FieldMeta> field_metas;
-  
+
     for (size_t j = 0; j < index_meta->fields().size(); j++) {
       const FieldMeta *field_meta = table_meta_.field(index_meta->fields()[j].c_str());
       if (field_meta == nullptr) {
@@ -185,6 +193,18 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
     indexes_.push_back(index);
   }
 
+  return rc;
+}
+
+RC Table::insert_record(Record &record, const Field_LOB_ANNO *record_lob_anno)
+{
+  RC rc = RC::SUCCESS;
+  rc    = record_handler_->insert_record(record.data(), table_meta_.record_size(), record_lob_anno, &record.rid());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
+    return rc;
+  }
+  // FIX: consider indexes
   return rc;
 }
 
@@ -275,7 +295,16 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
 
   for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
     const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
-    const Value &    value = values[i];
+    const Value     &value = values[i];
+
+    if (field->type() == AttrType::VECTORS && value.attr_type() == AttrType::VECTORS) {
+      int dim = table_meta_.out_field(i + normal_field_start_index)->len() / sizeof(float);
+      if (dim != value.length()) {  // dimension mismatch
+        LOG_WARN("wrong dimension, required: %d, get: %d", dim, value.length());
+        return RC::INVALID_ARGUMENT;
+      }
+    }
+
     if (field->type() != value.attr_type() && !value.get_null()) {
       Value real_value;
       rc = Value::cast_to(value, field->type(), real_value);
@@ -283,6 +312,13 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
         LOG_WARN("failed to cast value. table name:%s,field name:%s,value:%s ",
             table_meta_.name(), field->name(), value.to_string().c_str());
         break;
+      }
+      if (field->type() == AttrType::VECTORS) {
+        int dim = table_meta_.out_field(i + normal_field_start_index)->len() / sizeof(float);
+        if (dim != real_value.length()) {  // dimension mismatch
+          LOG_WARN("wrong dimension, required: %d, get: %d", dim, real_value.length());
+          return RC::INVALID_ARGUMENT;
+        }
       }
       rc = set_value_to_record(record_data, real_value, field);
     } else {
@@ -299,6 +335,47 @@ RC Table::make_record(int value_num, const Value *values, Record &record)
   return RC::SUCCESS;
 }
 
+RC Table::make_record_lob_anno(int value_num, Value *values, Record_LOB_ANNO &record_lob_anno)
+{
+  RC rc = RC::SUCCESS;
+  record_lob_anno.init(value_num);
+
+  const int normal_field_start_index = table_meta_.sys_field_num();
+  for (int i = 0; i < value_num && OB_SUCC(rc); i++) {
+    const FieldMeta *field = table_meta_.field(i + normal_field_start_index);
+    Value           &value = values[i];
+    Field_LOB_ANNO   field_anno;
+    if (field->type() == AttrType::TEXTS || field->type() == AttrType::VECTORS) {
+      field_anno.set_lob_field();
+
+      int    value_len = value.length();
+      size_t field_len = field->len() - sizeof(PageNum);
+
+      if (field->type() != value.attr_type()) {
+        // CHAR -> VECTOR
+        // CHAR -> TEXT
+        Value real_value;
+        rc = Value::cast_to(value, field->type(), real_value);
+        if (field->type() == AttrType::VECTORS) {
+          value     = std::move(real_value);
+          value_len = value.length();
+        }
+      }
+
+      if (field->type() == AttrType::VECTORS) {
+        value_len *= sizeof(float);
+      }
+      if (field_len < value_len) {
+        char *spill_data = const_cast<char *>(value.data()) + field_len;
+        int   spill_len  = value_len - field_len;
+        field_anno.set_data(spill_data, spill_len);
+      }
+    }
+    rc = record_lob_anno.set_field(i, field_anno);
+  }
+  return rc;
+}
+
 RC Table::set_value_to_record(char *record_data, const Value &value, const FieldMeta *field)
 {
   size_t       copy_len = field->len();
@@ -307,16 +384,28 @@ RC Table::set_value_to_record(char *record_data, const Value &value, const Field
     if (copy_len > data_len) {
       copy_len = data_len + 1;
     }
-  } else if(field->type() == AttrType::VECTORS){
-    if(copy_len != data_len * sizeof(float)){
-      LOG_INFO("vector length miss match, wanted: %d, have: %d", copy_len/sizeof(float), data_len);
-      return RC::INVALID_ARGUMENT;
+  } else if (field->type() == AttrType::VECTORS) {
+    copy_len -= sizeof(PageNum);
+    *(PageNum *)(record_data + field->offset() + copy_len) = BP_INVALID_PAGE_NUM;
+  } else if (field->type() == AttrType::TEXTS) {
+    // for AttrType::TEXT
+    // storage model: | ---- data ---- | 4B for page num |
+    // len <= TEXT_THRESHOLD: Same as AttrType::CHAR, directly store data in record
+    // len > TEXT_THRESHOLD : Store data that don't fit elsewhere
+    if (data_len > LOB_MAX_SIZE) {
+      LOG_ERROR("TEXT type length %d > maximum supported length %d", data_len, LOB_MAX_SIZE);
+      return RC::UNSUPPORTED;
+    }
+    copy_len -= sizeof(PageNum);
+    *(PageNum *)(record_data + field->offset() + copy_len) = BP_INVALID_PAGE_NUM;
+    if (copy_len > data_len) {
+      copy_len = data_len + 1;
     }
   }
 
   if (value.get_null() == 1) {
     // set value to null magic number
-    *(uint8_t*)(record_data + field->offset()) = NULL_MAGIC_NUMBER;
+    *(uint8_t *)(record_data + field->offset()) = NULL_MAGIC_NUMBER;
   } else {
     memcpy(record_data + field->offset(), value.data(), copy_len);
   }
@@ -491,7 +580,8 @@ RC Table::delete_record(const Record &record)
   return rc;
 }
 
-RC Table::update_record(const Record &record, char *update_data) {
+RC Table::update_record(const Record &record, char *update_data)
+{
   RC rc = RC::SUCCESS;
 
   for (Index *index : indexes_) {
@@ -506,7 +596,7 @@ RC Table::update_record(const Record &record, char *update_data) {
     if (rc != RC::SUCCESS) {
       LOG_WARN("fail to insert entry to index. table_name: %s, index_name: %s, rc: %s",
                 table_meta_.name(), index->index_meta().name(), strrc(rc));
-      
+
       // here we should rollback the delete operation
       RC rc2 = index->insert_entry(record.data(), &record.rid());
       if (rc2 != RC::SUCCESS) {
@@ -530,14 +620,27 @@ RC Table::update_record(const Record &record, char *update_data) {
   return rc;
 }
 
-RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
+RC Table::update_record(Record &record, Record &update_record, const Field_LOB_ANNO *record_lob_anno)
 {
   RC rc = RC::SUCCESS;
+
+  // do not consider index for now
+  rc = record_handler_->update_record(update_record.data(), record_lob_anno, &record.rid());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("fail to update record. table_name: %s", table_meta_.name());
+    return rc;
+  }
+  return rc;
+}
+
+RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
+{
+  RC  rc         = RC::SUCCESS;
   int fail_index = -1;
 
   for (size_t i = 0; i < indexes_.size(); i++) {
     Index *index = indexes_[i];
-    rc = index->insert_entry(record, &rid);
+    rc           = index->insert_entry(record, &rid);
     if (rc != RC::SUCCESS) {
       fail_index = i;
       break;
@@ -547,7 +650,7 @@ RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
   RC rc2;
   for (int i = fail_index - 1; i >= 0; i--) {
     Index *index = indexes_[i];
-    rc2 = index->delete_entry(record, &rid);
+    rc2          = index->delete_entry(record, &rid);
     if (rc2 != RC::SUCCESS) {
       LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
                 name(), rc, strrc(rc));

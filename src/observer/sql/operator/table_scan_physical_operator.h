@@ -37,6 +37,10 @@ public:
   PhysicalOperatorType type() const override { return PhysicalOperatorType::TABLE_SCAN; }
 
   RC open(Trx *trx) override;
+  
+  /**
+   * @brief 对于含有大对象的表，返回的是元组中含完整的大对象字段
+  */
   RC next() override;
   RC close() override;
 
