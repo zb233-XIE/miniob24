@@ -1582,7 +1582,6 @@ YY_RULE_SETUP
 last_flag=1; yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 	YY_BREAK
 case 71:
-/* rule 71 can match eol */
 YY_RULE_SETUP
 #line 162 "lex_sql.l"
 RETURN_TOKEN(LBRACE);

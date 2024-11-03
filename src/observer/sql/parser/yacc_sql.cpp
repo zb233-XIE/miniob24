@@ -2106,13 +2106,13 @@ yyreduce:
     (yyval.attr_info)->type = (AttrType)(yyvsp[-1].number);
     (yyval.attr_info)->name = (yyvsp[-2].string);
     if ((AttrType)(yyvsp[-1].number) == AttrType::DATES) {
-    (yyval.attr_info)->length = 8;
+      (yyval.attr_info)->length = 8;
     } else if ((AttrType)(yyvsp[-1].number) == AttrType::CHARS) {
-    (yyval.attr_info)->length = 32;
-      } else if ((AttrType)(yyvsp[-1].number) == AttrType::TEXTS) {
-        (yyval.attr_info)->length = LOB_OVERFLOW_THRESHOLD;
+      (yyval.attr_info)->length = 32;
+    } else if ((AttrType)(yyvsp[-1].number) == AttrType::TEXTS) {
+      (yyval.attr_info)->length = LOB_OVERFLOW_THRESHOLD;
     } else {
-    (yyval.attr_info)->length = 4;
+      (yyval.attr_info)->length = 4;
     }
     (yyval.attr_info)->nullable = (yyvsp[0].nullable_spec);
     free((yyvsp[-2].string));
