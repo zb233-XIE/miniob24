@@ -317,7 +317,7 @@ class Record_LOB_ANNO{
     int size() { return field_annos_.size(); }
 
     RC set_field(int index, Field_LOB_ANNO& field_anno){
-      if(index >= field_annos_.size()){
+      if(static_cast<size_t>(index) >= field_annos_.size()){
         LOG_ERROR("field index out of range");
         return RC::INTERNAL;
       }
