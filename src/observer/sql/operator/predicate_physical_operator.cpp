@@ -13,10 +13,13 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/operator/predicate_physical_operator.h"
+#include "common/lang/memory.h"
 #include "common/log/log.h"
 #include "sql/stmt/filter_stmt.h"
 #include "storage/field/field.h"
 #include "storage/record/record.h"
+#include <memory>
+#include <utility>
 
 PredicatePhysicalOperator::PredicatePhysicalOperator(std::unique_ptr<Expression> expr) : expression_(std::move(expr))
 {
@@ -46,8 +49,20 @@ RC PredicatePhysicalOperator::next()
       break;
     }
 
+    CompositeTuple composite_tuple;
+    ValueListTuple tuple_to_value;
+    ValueListTuple::make(*tuple, tuple_to_value);
+    composite_tuple.add_tuple(make_unique<ValueListTuple>(std::move(tuple_to_value)));
+
+    for (const Tuple *helper_tuple : helper_tuples_) {
+      ValueListTuple v_t;
+      ValueListTuple::make(*helper_tuple, v_t);
+      composite_tuple.add_tuple(make_unique<ValueListTuple>(std::move(v_t)));
+    }
+
     Value value;
-    rc = expression_->get_value(*tuple, value);
+    // rc = expression_->get_value(*tuple, value);
+    rc = expression_->get_value(composite_tuple, value);
     if (rc != RC::SUCCESS) {
       return rc;
     }

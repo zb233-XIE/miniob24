@@ -57,6 +57,14 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   }
 
   BinderContext binder_context;
+  if (stmt != nullptr) {
+    SelectStmt *select_stmt = static_cast<SelectStmt *>(stmt);
+    for (Table *t : select_stmt->tables()) {
+      binder_context.add_table(t);
+    }
+    delete stmt;
+    stmt = nullptr;
+  }
 
   // collect tables in `from` statement
   vector<Table *>                tables;

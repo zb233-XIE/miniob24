@@ -54,6 +54,8 @@ public:
   std::vector<std::unique_ptr<Expression>> &group_by() { return group_by_; }
   OrderByStmt                              *order_by() const { return order_by_; }
 
+  void set_tables(const std::vector<Table *> tables) { tables_ = tables; }
+
 private:
   std::vector<std::unique_ptr<Expression>> query_expressions_;
   std::vector<Table *>                     tables_;

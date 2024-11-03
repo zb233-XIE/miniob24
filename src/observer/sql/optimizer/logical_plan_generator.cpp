@@ -157,6 +157,23 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     last_oper = &predicate_oper;
   }
 
+  // 子查询的predicate_oper2
+  unique_ptr<LogicalOperator> predicate_oper2;
+
+  rc = create_plan(select_stmt->subquery_stmt(), predicate_oper2);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+    return rc;
+  }
+
+  if (predicate_oper2) {
+    if (*last_oper) {
+      predicate_oper2->add_child(std::move(*last_oper));
+    }
+
+    last_oper = &predicate_oper2;
+  }
+
   // having
   unique_ptr<LogicalOperator> having_predicate_oper;
   rc = create_plan(select_stmt->having_filter_stmt(), having_predicate_oper);
@@ -183,23 +200,6 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }
 
     last_oper = &group_by_oper;
-  }
-
-  // 子查询的predicate_oper2
-  unique_ptr<LogicalOperator> predicate_oper2;
-
-  rc = create_plan(select_stmt->subquery_stmt(), predicate_oper2);
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
-    return rc;
-  }
-
-  if (predicate_oper2) {
-    if (*last_oper) {
-      predicate_oper2->add_child(std::move(*last_oper));
-    }
-
-    last_oper = &predicate_oper2;
   }
 
   auto project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));

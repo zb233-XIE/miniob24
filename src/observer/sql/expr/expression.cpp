@@ -817,8 +817,15 @@ AttrType BoundSubqueryExpr::value_type() const
 
 RC BoundSubqueryExpr::get_value(const Tuple &tuple)
 {
-  // 开始之前将result清空
+  // 初始化操作
+  // 0. 新来了一个tuple，更新subquery的helper tuple情况
+  physical_oper_->helper_tuple_clear_rec(); // 先把旧的helper tuple清空
+  physical_oper_->add_helper_tuples(current_physical_oper_->get_helper_tuples()); // 继承原有的helper tuple
+  physical_oper_->add_helper_tuple(&tuple); // 加入新的helper tuple
+  physical_oper_->helper_tuples_pushdown(); // 将helper tuple推下去
+  // 1. 开始之前将result清空
   results_.clear();
+  // 2. 设置默认维度：1维
   d_ = 1;
   RC rc = physical_oper_->open(trx_);
   ASSERT(rc == RC::SUCCESS, "ERROR"); // debug

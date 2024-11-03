@@ -518,6 +518,7 @@ public:
   Stmt *stmt() { return stmt_;}
   void set_logical_operator(unique_ptr<LogicalOperator> &logical_oper);
   void set_physical_operator(unique_ptr<PhysicalOperator> &phy_oper);
+  void set_current_physical_operator(PhysicalOperator *current) { current_physical_oper_ = current; }
   unique_ptr<LogicalOperator> &get_logical_operator() { return logical_oper_; }
   void set_trx(Trx *trx) { trx_ = trx; }
 
@@ -525,6 +526,7 @@ private:
   Stmt *stmt_;
   unique_ptr<LogicalOperator> logical_oper_;
   unique_ptr<PhysicalOperator> physical_oper_;
+  PhysicalOperator *current_physical_oper_;
   vector<Value> results_;
   int d_; // 读上来每个tuple的维度
   Trx *trx_;

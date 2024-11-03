@@ -13,6 +13,9 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/operator/physical_operator.h"
+#include "common/log/log.h"
+#include "sql/expr/expression.h"
+#include <memory>
 
 std::string physical_operator_type_name(PhysicalOperatorType type)
 {
@@ -40,3 +43,38 @@ std::string physical_operator_type_name(PhysicalOperatorType type)
 std::string PhysicalOperator::name() const { return physical_operator_type_name(type()); }
 
 std::string PhysicalOperator::param() const { return ""; }
+
+void PhysicalOperator::add_helper_tuple(const Tuple *tuple)
+{
+  helper_tuples_.push_back(tuple);
+}
+
+void PhysicalOperator::add_helper_tuples(std::vector<const Tuple *> &tuples)
+{
+  for (const Tuple *tuple : tuples) {
+    helper_tuples_.push_back(tuple);
+  }
+}
+
+std::vector<const Tuple *> &PhysicalOperator::get_helper_tuples()
+{
+  return helper_tuples_;
+}
+
+void PhysicalOperator::helper_tuples_pushdown()
+{
+  for (auto &child_oper : children_) {
+    for (const Tuple *tuple : helper_tuples_) {
+      child_oper->add_helper_tuple(tuple);
+    }
+    child_oper->helper_tuples_pushdown();
+  }
+}
+
+void PhysicalOperator::helper_tuple_clear_rec()
+{
+  helper_tuples_.clear();
+  for (auto &child_oper : children_) {
+    child_oper->helper_tuple_clear_rec();
+  }
+}

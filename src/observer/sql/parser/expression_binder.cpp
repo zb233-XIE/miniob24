@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/parser/expression_binder.h"
 #include "sql/expr/expression_iterator.h"
 #include "sql/stmt/stmt.h"
+#include "sql/stmt/select_stmt.h"
 
 using namespace std;
 using namespace common;
@@ -497,8 +498,9 @@ RC ExpressionBinder::bind_subquery_expression(
   ParsedSqlNode *sub_sqlnode = unbound_subquery_expr->sub_sqlnode();
 
   // 将ParsedSqlNode转化为stmt
-  Stmt *sub_stmt = nullptr;
-  Stmt::create_stmt(db_, *sub_sqlnode, sub_stmt);
+  SelectStmt *sub_stmt = new SelectStmt();
+  sub_stmt->set_tables(context_.query_tables());
+  Stmt::create_stmt(db_, *sub_sqlnode, reinterpret_cast<Stmt*&>(sub_stmt));
 
   // 生成新的表达式
   BoundSubqueryExpr *bound_subquery_expr = new BoundSubqueryExpr(sub_stmt);
