@@ -33,6 +33,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/field/field_meta.h"
 #include "storage/index/bplus_tree_index.h"
 #include "storage/index/index.h"
+#include "storage/index/index_meta.h"
 #include "storage/record/record.h"
 #include "storage/record/record_manager.h"
 #include "storage/table/table.h"
@@ -547,6 +548,76 @@ RC Table::create_index(Trx *trx, const std::vector<FieldMeta> &field_metas, cons
   /// 内存中有一份元数据，磁盘文件也有一份元数据。修改磁盘文件时，先创建一个临时文件，写入完成后再rename为正式文件
   /// 这样可以防止文件内容不完整
   // 创建元数据临时文件
+  string  tmp_file = table_meta_file(base_dir_.c_str(), name()) + ".tmp";
+  fstream fs;
+  fs.open(tmp_file, ios_base::out | ios_base::binary | ios_base::trunc);
+  if (!fs.is_open()) {
+    LOG_ERROR("Failed to open file for write. file name=%s, errmsg=%s", tmp_file.c_str(), strerror(errno));
+    return RC::IOERR_OPEN;  // 创建索引中途出错，要做还原操作
+  }
+  if (new_table_meta.serialize(fs) < 0) {
+    LOG_ERROR("Failed to dump new table meta to file: %s. sys err=%d:%s", tmp_file.c_str(), errno, strerror(errno));
+    return RC::IOERR_WRITE;
+  }
+  fs.close();
+
+  // 覆盖原始元数据文件
+  string meta_file = table_meta_file(base_dir_.c_str(), name());
+
+  int ret = rename(tmp_file.c_str(), meta_file.c_str());
+  if (ret != 0) {
+    LOG_ERROR("Failed to rename tmp meta file (%s) to normal meta file (%s) while creating index (%s) on table (%s). "
+              "system error=%d:%s",
+              tmp_file.c_str(), meta_file.c_str(), index_name, name(), errno, strerror(errno));
+    return RC::IOERR_WRITE;
+  }
+
+  table_meta_.swap(new_table_meta);
+
+  LOG_INFO("Successfully added a new index (%s) on the table (%s)", index_name, name());
+  return rc;
+}
+
+RC Table::create_vector_index(
+    Trx *trx, const FieldMeta &field_meta, const char *index_name, DISTANCE_ALGO algorithm, int centroids, int probes)
+{
+  if (common::is_blank(index_name)) {
+    LOG_INFO("Invalid input arguments, table name is %s, index name is blank", name());
+    return RC::INVALID_ARGUMENT;
+  }
+
+  if (field_meta.type() != AttrType::VECTORS) {
+    LOG_INFO("Invalid input argument, table name is %s, %s is non-vector type", name(), field_meta.name());
+    return RC::INVALID_ARGUMENT;
+  }
+
+  IndexMeta new_index_meta;
+  RC        rc = new_index_meta.init(index_name, vector<FieldMeta>{field_meta}, false);
+  if (rc != RC::SUCCESS) {
+    LOG_INFO("Failed to init vector IndexMeta in table:%s, index_name:%s, field_name:%s", 
+             name(), index_name, field_meta.name());
+    return rc;
+  }
+
+  BplusTreeIndex *index      = new BplusTreeIndex();
+  string          index_file = table_index_file(base_dir_.c_str(), name(), index_name);
+  rc                         = index->create(this, index_file.c_str(), new_index_meta, std::vector<FieldMeta>{field_meta});
+  if (rc != RC::SUCCESS) {
+    delete index;
+    LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
+    return rc;
+  }
+  // checkpoint 1: do nothing, only update meta data
+  indexes_.push_back(index);
+
+  // update table meta file
+  TableMeta new_table_meta(table_meta_);
+  rc = new_table_meta.add_index(new_index_meta);
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Failed to add index (%s) on table (%s). error=%d:%s", index_name, name(), rc, strrc(rc));
+    return rc;
+  }
+
   string  tmp_file = table_meta_file(base_dir_.c_str(), name()) + ".tmp";
   fstream fs;
   fs.open(tmp_file, ios_base::out | ios_base::binary | ios_base::trunc);

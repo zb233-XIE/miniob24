@@ -57,8 +57,8 @@ enum CompOp
   NOT_EXISTS,
   IN,
   NOT_IN,
-  IS,           ///< "IS"
-  IS_NOT,       ///< "IS NOT"
+  IS,      ///< "IS"
+  IS_NOT,  ///< "IS NOT"
   NO_OP
 };
 
@@ -85,9 +85,9 @@ struct ConditionSqlNode
   Value          right_value;    ///< right-hand side value if right_is_attr = FALSE
 
   /// 6. 出现表达式
-  int neither = 0;
+  int         neither = 0;
   Expression *left_expr;
-  
+
   Expression *right_expr;
 
   // 子查询
@@ -96,7 +96,8 @@ struct ConditionSqlNode
   int flag = 0; // 1表示condition用or连接
 };
 
-struct OrderByItem {
+struct OrderByItem
+{
   RelAttrSqlNode attr;
   bool asc;
 };
@@ -165,9 +166,9 @@ class ParsedSqlNode;
 
 struct SetClauseSqlNode
 {
-  bool has_subquery;
-  std::string attribute_name; 
-  Value       value;
+  bool           has_subquery;
+  std::string    attribute_name;
+  Value          value;
   ParsedSqlNode *subquery;
 };
 
@@ -177,11 +178,10 @@ struct SetClauseSqlNode
  */
 struct UpdateSqlNode
 {
-  std::string                   relation_name;   ///< Relation to update
+  std::string                   relation_name;  ///< Relation to update
   std::vector<SetClauseSqlNode> set_clauses;
   std::vector<ConditionSqlNode> conditions;
 };
-
 
 /**
  * @brief 描述一个属性
@@ -190,10 +190,10 @@ struct UpdateSqlNode
  */
 struct AttrInfoSqlNode
 {
-  AttrType    type;    ///< Type of attribute
-  std::string name;    ///< Attribute name
-  size_t      length;  ///< Length of attribute
-  bool nullable;       ///< 是否可以为空
+  AttrType    type;      ///< Type of attribute
+  std::string name;      ///< Attribute name
+  size_t      length;    ///< Length of attribute
+  bool        nullable;  ///< 是否可以为空
 };
 
 /**
@@ -238,6 +238,40 @@ struct CreateIndexSqlNode
   std::string              relation_name;  ///< Relation name
   std::vector<std::string> attributes;     ///< Attribute names
   bool                     unique;         ///< 是否唯一索引
+};
+
+enum class DISTANCE_ALGO
+{
+  NONE = 0,
+  L2_DISTANCE,
+  INNER_PRODUCT,
+  COSINE_DISTANCE,
+};
+
+enum class VecIndexField
+{
+  DISTANCE_FIELD,
+  TYPE_FIELD,
+  LISTS_FIELD,
+  PROBES_FIELD,
+  FIELD_COUNT,
+};
+
+struct VecIndexFieldAnno
+{
+  VecIndexField field;
+  int           value;
+};
+
+struct CreateVectorIndexSqlNode
+{
+  std::string   index_name;
+  std::string   relation_name;
+  std::string   attribute;
+  DISTANCE_ALGO distance_algo;
+  bool          type;
+  int           centroids;
+  int           probes;
 };
 
 /**
@@ -316,6 +350,7 @@ enum SqlCommandFlag
 {
   SCF_ERROR = 0,
   SCF_ERROR_AGGREGATION,
+  SCF_ERROR_CREATE_VECTOR_INDEX,
   SCF_CALC,
   SCF_SELECT,
   SCF_INSERT,
@@ -325,6 +360,7 @@ enum SqlCommandFlag
   SCF_CREATE_VIEW,
   SCF_DROP_TABLE,
   SCF_CREATE_INDEX,
+  SCF_CREATE_VECTOR_INDEX,
   SCF_DROP_INDEX,
   SCF_SYNC,
   SCF_SHOW_TABLES,

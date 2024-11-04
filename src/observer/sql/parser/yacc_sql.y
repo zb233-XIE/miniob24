@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <utility>
+#include <limits>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
@@ -149,6 +151,12 @@ bool is_valid_date(const char *date) {
         UNIQUE
         LBRACKET
         RBRACKET
+        WITH
+        DISTANCE
+        TYPE
+        LISTS
+        PROBES
+        IVFFLAT
         L2_DISTANCE
         COSINE_DISTANCE
         INNER_PRODUCT
@@ -161,6 +169,7 @@ bool is_valid_date(const char *date) {
 				ORDER_BY
 				ASC
         AS
+        LIMIT
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -193,6 +202,8 @@ bool is_valid_date(const char *date) {
   char *                                     date;
   bool                                       nullable_spec;
   bool                                       asc_desc;
+  VecIndexFieldAnno                          vec_index_param;
+  std::vector<VecIndexFieldAnno> *           vec_index_param_list;
 }
 
 %token <number> NUMBER
@@ -238,6 +249,9 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            show_tables_stmt
 %type <sql_node>            desc_table_stmt
 %type <sql_node>            create_index_stmt
+%type <sql_node>            create_vector_index_stmt
+%type <vec_index_param>     vector_index_field;
+%type <vec_index_param_list>vector_index_param_list;
 %type <sql_node>            drop_index_stmt
 %type <sql_node>            sync_stmt
 %type <sql_node>            begin_stmt
@@ -256,6 +270,7 @@ bool is_valid_date(const char *date) {
 %type <nullable_spec>       nullable_spec
 %type <order_by_item>       order_by_item
 %type <asc_desc>            asc_desc
+%type  <number>             limit
 %type <order_by_list>       order_by_list
 %type <order_by_list>       order_by
 
@@ -287,6 +302,7 @@ command_wrapper:
   | show_tables_stmt
   | desc_table_stmt
   | create_index_stmt
+  | create_vector_index_stmt
   | drop_index_stmt
   | sync_stmt
   | begin_stmt
@@ -383,6 +399,7 @@ create_index_stmt:    /*create index 语句的语法解析树*/
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
+      create_index.index_name = 
       create_index.index_name = $3;
       create_index.relation_name = $5;
       create_index.unique = false;
@@ -415,6 +432,124 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       }
       free($4);
       free($6);
+    }
+    ;
+
+create_vector_index_stmt:
+    CREATE VECTOR_T INDEX ID ON relation LBRACE ID RBRACE WITH LBRACE vector_index_param_list RBRACE
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_VECTOR_INDEX);
+      CreateVectorIndexSqlNode &create_vector_index = $$->create_vector_index;
+      create_vector_index.index_name    = $4;
+      free($4);
+      create_vector_index.relation_name = $6;
+      free($6);
+      create_vector_index.attribute     = $8;
+      free($8);
+
+      create_vector_index.distance_algo = DISTANCE_ALGO::NONE;
+      create_vector_index.type          = false;
+      create_vector_index.centroids     = -1;
+      create_vector_index.probes        = -1;
+
+      int param_count = $12->size();
+      if(param_count != static_cast<int>(VecIndexField::FIELD_COUNT)){
+        yyerror(&@1, NULL, sql_result, NULL, SCF_ERROR_CREATE_VECTOR_INDEX, "param mismatch, need: {distance, type, lists, probes}");
+      } else {
+        bool flag = true;
+        string err_msg;
+        for(auto param: (*$12)){
+          switch (static_cast<int>(param.field)){
+            case static_cast<int>(VecIndexField::DISTANCE_FIELD): {
+              if(create_vector_index.distance_algo != DISTANCE_ALGO::NONE){
+                flag = false;
+                err_msg = "distance field already set";
+              }
+              create_vector_index.distance_algo = static_cast<DISTANCE_ALGO>(param.value);
+            } break;
+            case static_cast<int>(VecIndexField::TYPE_FIELD): {
+              if(create_vector_index.type){
+                flag = false;
+                err_msg = "index type field already set";
+              }
+              create_vector_index.type = true;
+            } break;
+            case static_cast<int>(VecIndexField::LISTS_FIELD): {
+              if(create_vector_index.centroids != -1){
+                flag = false;
+                err_msg = "lists field already set";
+              }
+              if(param.value < 0){
+                flag = false;
+                err_msg = "lists field must be positive integer";
+              }
+              create_vector_index.centroids = param.value;
+            } break;
+            case static_cast<int>(VecIndexField::PROBES_FIELD): {
+              if(create_vector_index.probes != -1){
+                flag = false;
+                err_msg = "probe field already set";
+              }
+              if(param.value < 0){
+                flag = false;
+                err_msg = "probe field must be positive integer";
+              }
+              create_vector_index.probes = param.value;
+            } break;
+            default: {
+              flag = false;
+              break;
+            }
+          }
+          if(!flag) break;
+        }
+        if(!flag){
+          yyerror(&@1, NULL, sql_result, NULL, SCF_ERROR_CREATE_VECTOR_INDEX, err_msg.c_str());
+        }
+      }
+      // error handling
+    }
+    ;
+
+vector_index_param_list:
+    vector_index_field {
+      $$ = new std::vector<VecIndexFieldAnno>();
+      $$->push_back($1);
+    }
+    | vector_index_field COMMA vector_index_param_list {
+      if($3 != nullptr){
+        $$ = $3;
+      } else {
+        $$ = new std::vector<VecIndexFieldAnno>();
+      }
+      $$->push_back($1);
+    }
+    ;
+
+vector_index_field:
+    DISTANCE EQ L2_DISTANCE
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::DISTANCE_FIELD, static_cast<int>(DISTANCE_ALGO::L2_DISTANCE)};
+    }
+    | DISTANCE EQ COSINE_DISTANCE
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::DISTANCE_FIELD, static_cast<int>(DISTANCE_ALGO::COSINE_DISTANCE)};
+    }
+    | DISTANCE EQ INNER_PRODUCT
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::DISTANCE_FIELD, static_cast<int>(DISTANCE_ALGO::INNER_PRODUCT)};
+    }
+    | TYPE EQ IVFFLAT
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::TYPE_FIELD, 1};
+    }
+    | LISTS EQ NUMBER
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::LISTS_FIELD, $3};
+    }
+    | PROBES EQ NUMBER
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::PROBES_FIELD, $3};
     }
     ;
 
@@ -532,9 +667,9 @@ attr_def:
     if ((AttrType)$2 == AttrType::DATES) {
       $$->length = 8;
     } else if ((AttrType)$2 == AttrType::CHARS) {
-    $$->length = 32;
-      } else if ((AttrType)$2 == AttrType::TEXTS) {
-        $$->length = LOB_OVERFLOW_THRESHOLD;
+      $$->length = 32;
+    } else if ((AttrType)$2 == AttrType::TEXTS) {
+      $$->length = LOB_OVERFLOW_THRESHOLD;
     } else {
       $$->length = 4;
     }
@@ -732,7 +867,7 @@ set_clause:
   }
   ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list join_list where group_by having order_by
+    SELECT expression_list FROM rel_list join_list where group_by having order_by limit
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
       $$->sql_str = token_name(sql_string, &@$);
@@ -781,6 +916,7 @@ select_stmt:        /*  select 语句的语法解析树*/
 				$$->selection.order_by.swap(*$9);
 				delete $9;
 			}
+      $$->selection.limits = $10;
 	}
 	;
 
@@ -820,9 +956,32 @@ order_by_item:
 		$$ = new OrderByItem;
 		$$->attr = *$1;
 		$$->asc = $2;
+    $$->expression = nullptr;
 		delete $1;
 	}
+  | L2_DISTANCE LBRACE expression COMMA expression RBRACE {
+    $$ = new OrderByItem;
+    $$->expression = create_arithmetic_expression(ArithmeticExpr::Type::L2_DIS, $3, $5, sql_string, &@$);
+  }
+  | COSINE_DISTANCE LBRACE expression COMMA expression RBRACE {
+    $$ = new OrderByItem;
+    $$->expression = create_arithmetic_expression(ArithmeticExpr::Type::COS_DIS, $3, $5, sql_string, &@$);
+  }
+  | INNER_PRODUCT LBRACE expression COMMA expression RBRACE {
+    $$ = new OrderByItem;
+    $$->expression = create_arithmetic_expression(ArithmeticExpr::Type::INN_PDT, $3, $5, sql_string, &@$);
+  }
 	;
+
+limit:
+  /* empty */
+  {
+    $$ = INT_MAX; // set to a large number
+  }
+  | LIMIT NUMBER
+  {
+    $$ = $2;
+  }
 
 asc_desc:
 	/* empty */

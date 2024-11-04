@@ -78,6 +78,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <utility>
+#include <limits>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
@@ -1884,6 +1886,7 @@ yyreduce:
     {
       (yyval.sql_node) = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = (yyval.sql_node)->create_index;
+      create_index.index_name = 
       create_index.index_name = (yyvsp[-5].string);
       create_index.relation_name = (yyvsp[-3].string);
       create_index.unique = false;
@@ -2299,19 +2302,19 @@ yyreduce:
         delete (yyvsp[-7].expression_list);
       }
 
-      if ((yyvsp[-5].relation_list) != nullptr) {
-        (yyval.sql_node)->selection.relations.swap(*(yyvsp[-5].relation_list));
-        delete (yyvsp[-5].relation_list);
+      if ((yyvsp[-6].relation_list) != nullptr) {
+        (yyval.sql_node)->selection.relations.swap(*(yyvsp[-6].relation_list));
+        delete (yyvsp[-6].relation_list);
       }
 
-      if ((yyvsp[-4].join_tuple_list) != nullptr) {
-        (yyval.sql_node)->selection.join_relations.swap(*(std::get<0>(*(yyvsp[-4].join_tuple_list))));
-        (yyval.sql_node)->selection.join_conditions.swap(*(std::get<1>(*(yyvsp[-4].join_tuple_list))));
-        delete std::get<0>(*(yyvsp[-4].join_tuple_list));
-        delete std::get<1>(*(yyvsp[-4].join_tuple_list));
+      if ((yyvsp[-5].join_tuple_list) != nullptr) {
+        (yyval.sql_node)->selection.join_relations.swap(*(std::get<0>(*(yyvsp[-5].join_tuple_list))));
+        (yyval.sql_node)->selection.join_conditions.swap(*(std::get<1>(*(yyvsp[-5].join_tuple_list))));
+        delete std::get<0>(*(yyvsp[-5].join_tuple_list));
+        delete std::get<1>(*(yyvsp[-5].join_tuple_list));
         std::reverse((yyval.sql_node)->selection.join_relations.begin(), (yyval.sql_node)->selection.join_relations.end());
         std::reverse((yyval.sql_node)->selection.join_conditions.begin(), (yyval.sql_node)->selection.join_conditions.end());
-        delete (yyvsp[-4].join_tuple_list);
+        delete (yyvsp[-5].join_tuple_list);
       }
 
       if ((yyvsp[-3].condition_list) != nullptr) {
@@ -2324,15 +2327,15 @@ yyreduce:
         delete (yyvsp[-3].condition_list);
       }
 
-      if ((yyvsp[-2].expression_list) != nullptr) {
-        (yyval.sql_node)->selection.group_by.swap(*(yyvsp[-2].expression_list));
-        delete (yyvsp[-2].expression_list);
+      if ((yyvsp[-3].expression_list) != nullptr) {
+        (yyval.sql_node)->selection.group_by.swap(*(yyvsp[-3].expression_list));
+        delete (yyvsp[-3].expression_list);
       }
 
       // 处理having，having和where不能共存，先不考虑出现这种测试用例
-      if ((yyvsp[-1].condition_list) != nullptr) {
-        (yyval.sql_node)->selection.having.swap(*(yyvsp[-1].condition_list));
-        delete (yyvsp[-1].condition_list);
+      if ((yyvsp[-2].condition_list) != nullptr) {
+        (yyval.sql_node)->selection.having.swap(*(yyvsp[-2].condition_list));
+        delete (yyvsp[-2].condition_list);
       }
 
       if ((yyvsp[0].expression_list) != nullptr) {

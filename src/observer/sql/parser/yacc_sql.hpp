@@ -157,6 +157,8 @@ union YYSTYPE
   char *                                     date;
   bool                                       nullable_spec;
   bool                                       asc_desc;
+  VecIndexFieldAnno                          vec_index_param;
+  std::vector<VecIndexFieldAnno> *           vec_index_param_list;
 
 #line 153 "yacc_sql.hpp"
 
