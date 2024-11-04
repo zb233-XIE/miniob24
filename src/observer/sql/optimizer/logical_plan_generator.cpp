@@ -16,6 +16,8 @@ See the Mulan PSL v2 for more details. */
 
 #include <common/log/log.h>
 #include <memory>
+#include <utility>
+#include <vector>
 
 #include "sql/operator/calc_logical_operator.h"
 #include "sql/operator/delete_logical_operator.h"
@@ -112,13 +114,13 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   unique_ptr<LogicalOperator> table_oper(nullptr);
   last_oper = &table_oper;
 
+  bool vector_serach_with_order_by = false;
   // 在JonLogicalOperator和TableGetLogicalOperator之间插入PredicateLogicalOperator
   size_t idx = 0;
   const std::vector<Table *> &tables = select_stmt->tables();
   // FIXME: handle view cases of join tables
   bool has_view_flag = false;
   for (Table *table : tables) {
-
     unique_ptr<LogicalOperator> table_get_oper;
     if (table->view() == nullptr) {
       table_get_oper = make_unique<TableGetLogicalOperator>(table, ReadWriteMode::READ_ONLY);
@@ -141,6 +143,24 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }
 
     if (table_oper == nullptr) {
+      if(select_stmt->order_by() != nullptr){
+        auto * vector_order_by = select_stmt->order_by();
+        const auto &order_by_items = vector_order_by->items();
+        if(order_by_items.size() == 1 && order_by_items[0].expression != nullptr){
+          // treat vector type order by specially
+          // eg. SELECT embedding FROM items ORDER BY L2_DISTANCE('[1,2,3]', C1) LIMIT 3;
+          auto table_get_oper_ptr = dynamic_cast<TableGetLogicalOperator *>(table_get_oper.get());
+          
+          auto * vector_expression = order_by_items[0].expression;
+          unique_ptr<Expression> exp(vector_expression);
+          std::vector<std::unique_ptr<Expression>> predicate_vector;
+          predicate_vector.push_back(std::move(exp));
+          table_get_oper_ptr->set_predicates(std::move(predicate_vector));
+
+          table_get_oper_ptr->set_limit(select_stmt->limits());
+          vector_serach_with_order_by = true;
+        }
+      }
       table_oper = std::move(table_get_oper);
     } else {
       JoinLogicalOperator *join_oper = new JoinLogicalOperator;
@@ -239,12 +259,13 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   }
 
   unique_ptr<LogicalOperator> order_by_oper;
-  rc = create_plan(select_stmt->order_by(), order_by_oper);
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to create order by logical plan. rc=%s", strrc(rc));
-    return rc;
+  if(!vector_serach_with_order_by){
+    rc = create_plan(select_stmt->order_by(), order_by_oper);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to create order by logical plan. rc=%s", strrc(rc));
+      return rc;
+    }
   }
-
   if (order_by_oper) {
     order_by_oper->add_child(std::move(project_oper));
     logical_operator = std::move(order_by_oper);

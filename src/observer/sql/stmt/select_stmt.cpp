@@ -309,6 +309,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->having_filter_stmt_ = having_filter_stmt;
   select_stmt->subquery_stmt_ = subquery_stmt;
   select_stmt->order_by_ = order_by_stmt;
+  select_stmt->limits_    = select_sql.limits;
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }
