@@ -117,6 +117,7 @@ bool is_valid_date(const char *date) {
         FROM
         WHERE
         AND
+        OR
         SET
         ON
         LOAD
@@ -665,6 +666,11 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if ($6 != nullptr) {
+        ConditionSqlNode last = $6->back();
+        if (last.flag) {
+          $6->pop_back();
+          $$->selection.is_and = 0;
+        }
         $$->selection.conditions.swap(*$6);
         delete $6;
       }
@@ -962,6 +968,15 @@ condition_list:
       $$ = $3;
       $$->emplace_back(*$1);
       delete $1;
+    }
+    | condition OR condition_list {
+      $$ = $3;
+      $$->emplace_back(*$1);
+      ConditionSqlNode *tmp = new ConditionSqlNode;
+      tmp->flag = 1;
+      $$->emplace_back(*tmp);
+      delete $1;
+      delete tmp;
     }
     ;
 condition:

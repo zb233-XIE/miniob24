@@ -85,50 +85,51 @@ extern int yydebug;
     FROM = 291,
     WHERE = 292,
     AND = 293,
-    SET = 294,
-    ON = 295,
-    LOAD = 296,
-    DATA = 297,
-    INFILE = 298,
-    EXPLAIN = 299,
-    STORAGE = 300,
-    FORMAT = 301,
-    EQ = 302,
-    LT = 303,
-    GT = 304,
-    LE = 305,
-    GE = 306,
-    NE = 307,
-    LK = 308,
-    NLK = 309,
-    IS_T = 310,
-    IS_NOT_T = 311,
-    MAX = 312,
-    MIN = 313,
-    COUNT = 314,
-    AVG = 315,
-    SUM = 316,
-    INNER = 317,
-    JOIN = 318,
-    UNIQUE = 319,
-    LBRACKET = 320,
-    RBRACKET = 321,
-    L2_DISTANCE = 322,
-    COSINE_DISTANCE = 323,
-    INNER_PRODUCT = 324,
-    EXISTS_T = 325,
-    NOT = 326,
-    IN_T = 327,
-    NULL_T = 328,
-    NOT_NULL_T = 329,
-    ORDER_BY = 330,
-    ASC = 331,
-    NUMBER = 332,
-    FLOAT = 333,
-    ID = 334,
-    SSS = 335,
-    DATE = 336,
-    UMINUS = 337
+    OR = 294,
+    SET = 295,
+    ON = 296,
+    LOAD = 297,
+    DATA = 298,
+    INFILE = 299,
+    EXPLAIN = 300,
+    STORAGE = 301,
+    FORMAT = 302,
+    EQ = 303,
+    LT = 304,
+    GT = 305,
+    LE = 306,
+    GE = 307,
+    NE = 308,
+    LK = 309,
+    NLK = 310,
+    IS_T = 311,
+    IS_NOT_T = 312,
+    MAX = 313,
+    MIN = 314,
+    COUNT = 315,
+    AVG = 316,
+    SUM = 317,
+    INNER = 318,
+    JOIN = 319,
+    UNIQUE = 320,
+    LBRACKET = 321,
+    RBRACKET = 322,
+    L2_DISTANCE = 323,
+    COSINE_DISTANCE = 324,
+    INNER_PRODUCT = 325,
+    EXISTS_T = 326,
+    NOT = 327,
+    IN_T = 328,
+    NULL_T = 329,
+    NOT_NULL_T = 330,
+    ORDER_BY = 331,
+    ASC = 332,
+    NUMBER = 333,
+    FLOAT = 334,
+    ID = 335,
+    SSS = 336,
+    DATE = 337,
+    UMINUS = 338
   };
 #endif
 
@@ -136,7 +137,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 161 "yacc_sql.y"
+#line 162 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -166,7 +167,7 @@ union YYSTYPE
   bool                                       nullable_spec;
   bool                                       asc_desc;
 
-#line 170 "yacc_sql.hpp"
+#line 171 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

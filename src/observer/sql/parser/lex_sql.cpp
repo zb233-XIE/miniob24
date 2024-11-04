@@ -385,8 +385,8 @@ static void yynoreturn yy_fatal_error ( const char* msg , yyscan_t yyscanner );
 	yyg->yy_hold_char = *yy_cp; \
 	*yy_cp = '\0'; \
 	yyg->yy_c_buf_p = yy_cp;
-#define YY_NUM_RULES 89
-#define YY_END_OF_BUFFER 90
+#define YY_NUM_RULES 90
+#define YY_END_OF_BUFFER 91
 /* This struct is not used in this scanner,
    but its presence is necessary. */
 struct yy_trans_info
@@ -396,38 +396,38 @@ struct yy_trans_info
 	};
 static const flex_int16_t yy_accept[300] =
     {   0,
-        0,    0,    0,    0,   90,   88,    1,    2,   88,   88,
-       88,   70,   71,   84,   82,   74,   83,    7,   85,    3,
-        6,   79,   75,   81,   69,   69,   69,   69,   69,   69,
-       69,   69,   69,   69,   69,   69,   69,   69,   69,   69,
-       69,   69,   69,   69,   69,   72,   73,   89,   78,    0,
-       86,    0,    0,   87,    0,    3,    0,   76,   77,   80,
-       69,   69,   69,   69,   69,   69,   48,   69,   69,   69,
-       69,   69,   69,   69,   69,   69,   69,   69,   69,   69,
-       69,   10,   49,   69,   69,   69,   69,   69,   69,   69,
-       69,   19,   69,   69,   69,   69,   69,   69,   69,   69,
+        0,    0,    0,    0,   91,   89,    1,    2,   89,   89,
+       89,   71,   72,   85,   83,   75,   84,    7,   86,    3,
+        6,   80,   76,   82,   70,   70,   70,   70,   70,   70,
+       70,   70,   70,   70,   70,   70,   70,   70,   70,   70,
+       70,   70,   70,   70,   70,   73,   74,   90,   79,    0,
+       87,    0,    0,   88,    0,    3,    0,   77,   78,   81,
+       70,   70,   70,   70,   70,   70,   49,   70,   70,   70,
+       70,   70,   70,   70,   70,   70,   70,   70,   70,   70,
+       70,   10,   50,   70,   70,   70,   70,   70,   70,   70,
+       70,   19,   29,   70,   70,   70,   70,   70,   70,   70,
 
-       69,   69,   69,   69,   69,    0,    0,    4,   28,   64,
-       57,   69,   69,   69,   69,   69,   69,   69,   69,   69,
-       69,   69,   69,   69,   69,   69,   69,   69,   69,   69,
-       69,   69,   69,   69,   38,    0,   69,   69,   69,   69,
-       54,   55,    9,   69,   69,   69,   69,   34,   69,   69,
-       58,   69,   69,   69,   69,   69,   69,   69,    0,    0,
-       69,   23,   39,   69,   69,   69,   69,   44,   41,   69,
-       13,   15,   69,   11,   69,   69,   69,   24,   69,   69,
-       12,   69,   69,   69,   69,   30,    0,   26,   69,   59,
-       43,    0,   61,   69,   69,   69,   20,   69,   21,   69,
+       70,   70,   70,   70,   70,    0,    0,    4,   28,   65,
+       58,   70,   70,   70,   70,   70,   70,   70,   70,   70,
+       70,   70,   70,   70,   70,   70,   70,   70,   70,   70,
+       70,   70,   70,   70,   39,    0,   70,   70,   70,   70,
+       55,   56,    9,   70,   70,   70,   70,   35,   70,   70,
+       59,   70,   70,   70,   70,   70,   70,   70,    0,    0,
+       70,   23,   40,   70,   70,   70,   70,   45,   42,   70,
+       13,   15,   70,   11,   70,   70,   70,   24,   70,   70,
+       12,   70,   70,   70,   70,   31,    0,   26,   70,   60,
+       44,    0,   62,   70,   70,   70,   20,   70,   21,   70,
 
-       69,   69,   69,   69,   69,    0,    0,   35,   69,   69,
-       56,   69,   69,   69,   69,   40,   69,   47,   69,   18,
-       69,   25,   69,    0,   69,    0,    0,   69,   69,   69,
-       69,   16,   69,   69,   69,   69,   27,    0,    0,   36,
-       69,   14,   32,    8,   69,   53,   51,   45,   69,   29,
-       50,   69,    0,    0,    0,   69,   22,   69,   17,   65,
-       33,   31,   42,    5,    5,    5,    5,   69,   46,   69,
-       69,    0,    0,    0,   69,   52,   69,   69,   69,   60,
-       62,   63,   37,   69,   69,   69,   69,   69,   69,   69,
-       69,   66,   69,   69,   69,   68,   69,   67,    0
+       70,   70,   70,   70,   70,    0,    0,   36,   70,   70,
+       57,   70,   70,   70,   70,   41,   70,   48,   70,   18,
+       70,   25,   70,    0,   70,    0,    0,   70,   70,   70,
+       70,   16,   70,   70,   70,   70,   27,    0,    0,   37,
+       70,   14,   33,    8,   70,   54,   52,   46,   70,   30,
+       51,   70,    0,    0,    0,   70,   22,   70,   17,   66,
+       34,   32,   43,    5,    5,    5,    5,   70,   47,   70,
+       70,    0,    0,    0,   70,   53,   70,   70,   70,   61,
+       63,   64,   38,   70,   70,   70,   70,   70,   70,   70,
+       70,   67,   70,   70,   70,   69,   70,   68,    0
 
     } ;
 
@@ -1368,247 +1368,247 @@ last_flag=0;RETURN_TOKEN(AND);
 case 29:
 YY_RULE_SETUP
 #line 120 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(INSERT);
+last_flag=0;RETURN_TOKEN(OR);
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
 #line 121 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(INTO);
+last_flag=0;RETURN_TOKEN(INSERT);
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
 #line 122 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(VALUES);
+last_flag=0;RETURN_TOKEN(INTO);
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
 #line 123 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(DELETE);
+last_flag=0;RETURN_TOKEN(VALUES);
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
 #line 124 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(UPDATE);
+last_flag=0;RETURN_TOKEN(DELETE);
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
 #line 125 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(SET);
+last_flag=0;RETURN_TOKEN(UPDATE);
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
 #line 126 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(TRX_BEGIN);
+last_flag=0;RETURN_TOKEN(SET);
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
 #line 127 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(TRX_COMMIT);
+last_flag=0;RETURN_TOKEN(TRX_BEGIN);
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
 #line 128 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(TRX_ROLLBACK);
+last_flag=0;RETURN_TOKEN(TRX_COMMIT);
 	YY_BREAK
 case 38:
 YY_RULE_SETUP
 #line 129 "lex_sql.l"
-RETURN_TOKEN(INT_T);
+last_flag=0;RETURN_TOKEN(TRX_ROLLBACK);
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
 #line 130 "lex_sql.l"
-RETURN_TOKEN(STRING_T);
+RETURN_TOKEN(INT_T);
 	YY_BREAK
 case 40:
 YY_RULE_SETUP
 #line 131 "lex_sql.l"
-RETURN_TOKEN(FLOAT_T);
+RETURN_TOKEN(STRING_T);
 	YY_BREAK
 case 41:
 YY_RULE_SETUP
 #line 132 "lex_sql.l"
-RETURN_TOKEN(DATE_T);
+RETURN_TOKEN(FLOAT_T);
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
 #line 133 "lex_sql.l"
-RETURN_TOKEN(VECTOR_T);
+RETURN_TOKEN(DATE_T);
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
 #line 134 "lex_sql.l"
-RETURN_TOKEN(LOAD);
+RETURN_TOKEN(VECTOR_T);
 	YY_BREAK
 case 44:
 YY_RULE_SETUP
 #line 135 "lex_sql.l"
-RETURN_TOKEN(DATA);
+RETURN_TOKEN(LOAD);
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
 #line 136 "lex_sql.l"
-RETURN_TOKEN(INFILE);
+RETURN_TOKEN(DATA);
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
 #line 137 "lex_sql.l"
-RETURN_TOKEN(EXPLAIN);
+RETURN_TOKEN(INFILE);
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
 #line 138 "lex_sql.l"
-RETURN_TOKEN(GROUP);
+RETURN_TOKEN(EXPLAIN);
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
 #line 139 "lex_sql.l"
-RETURN_TOKEN(BY);
+RETURN_TOKEN(GROUP);
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
 #line 140 "lex_sql.l"
-RETURN_TOKEN(IS_T);
+RETURN_TOKEN(BY);
 	YY_BREAK
 case 50:
 YY_RULE_SETUP
 #line 141 "lex_sql.l"
-RETURN_TOKEN(IS_NOT_T);
+RETURN_TOKEN(IS_T);
 	YY_BREAK
 case 51:
 YY_RULE_SETUP
 #line 142 "lex_sql.l"
-RETURN_TOKEN(HAVING);
+RETURN_TOKEN(IS_NOT_T);
 	YY_BREAK
 case 52:
 YY_RULE_SETUP
 #line 143 "lex_sql.l"
-RETURN_TOKEN(STORAGE);
+RETURN_TOKEN(HAVING);
 	YY_BREAK
 case 53:
 YY_RULE_SETUP
 #line 144 "lex_sql.l"
-RETURN_TOKEN(FORMAT);
+RETURN_TOKEN(STORAGE);
 	YY_BREAK
 case 54:
 YY_RULE_SETUP
 #line 145 "lex_sql.l"
-RETURN_TOKEN(MAX);
+RETURN_TOKEN(FORMAT);
 	YY_BREAK
 case 55:
 YY_RULE_SETUP
 #line 146 "lex_sql.l"
-RETURN_TOKEN(MIN);
+RETURN_TOKEN(MAX);
 	YY_BREAK
 case 56:
 YY_RULE_SETUP
 #line 147 "lex_sql.l"
-RETURN_TOKEN(COUNT);
+RETURN_TOKEN(MIN);
 	YY_BREAK
 case 57:
 YY_RULE_SETUP
 #line 148 "lex_sql.l"
-RETURN_TOKEN(AVG);
+RETURN_TOKEN(COUNT);
 	YY_BREAK
 case 58:
 YY_RULE_SETUP
 #line 149 "lex_sql.l"
-RETURN_TOKEN(SUM);
+RETURN_TOKEN(AVG);
 	YY_BREAK
 case 59:
 YY_RULE_SETUP
 #line 150 "lex_sql.l"
-RETURN_TOKEN(LK);
+RETURN_TOKEN(SUM);
 	YY_BREAK
 case 60:
 YY_RULE_SETUP
 #line 151 "lex_sql.l"
-RETURN_TOKEN(NLK);
+RETURN_TOKEN(LK);
 	YY_BREAK
 case 61:
 YY_RULE_SETUP
 #line 152 "lex_sql.l"
-RETURN_TOKEN(NULL_T);
+RETURN_TOKEN(NLK);
 	YY_BREAK
 case 62:
 YY_RULE_SETUP
 #line 153 "lex_sql.l"
-RETURN_TOKEN(NOT_NULL_T);
+RETURN_TOKEN(NULL_T);
 	YY_BREAK
 case 63:
 YY_RULE_SETUP
 #line 154 "lex_sql.l"
-RETURN_TOKEN(ORDER_BY);
+RETURN_TOKEN(NOT_NULL_T);
 	YY_BREAK
 case 64:
 YY_RULE_SETUP
 #line 155 "lex_sql.l"
-RETURN_TOKEN(ASC);
+RETURN_TOKEN(ORDER_BY);
 	YY_BREAK
 case 65:
 YY_RULE_SETUP
 #line 156 "lex_sql.l"
-RETURN_TOKEN(UNIQUE);
+RETURN_TOKEN(ASC);
 	YY_BREAK
 case 66:
 YY_RULE_SETUP
 #line 157 "lex_sql.l"
-RETURN_TOKEN(L2_DISTANCE);
+RETURN_TOKEN(UNIQUE);
 	YY_BREAK
 case 67:
 YY_RULE_SETUP
 #line 158 "lex_sql.l"
-RETURN_TOKEN(COSINE_DISTANCE);
+RETURN_TOKEN(L2_DISTANCE);
 	YY_BREAK
 case 68:
 YY_RULE_SETUP
 #line 159 "lex_sql.l"
-RETURN_TOKEN(INNER_PRODUCT);
+RETURN_TOKEN(COSINE_DISTANCE);
 	YY_BREAK
 case 69:
 YY_RULE_SETUP
 #line 160 "lex_sql.l"
-last_flag=1; yylval->string=strdup(yytext); RETURN_TOKEN(ID);
+RETURN_TOKEN(INNER_PRODUCT);
 	YY_BREAK
 case 70:
 YY_RULE_SETUP
 #line 161 "lex_sql.l"
-RETURN_TOKEN(LBRACE);
+last_flag=1; yylval->string=strdup(yytext); RETURN_TOKEN(ID);
 	YY_BREAK
 case 71:
 YY_RULE_SETUP
 #line 162 "lex_sql.l"
-last_flag=1; RETURN_TOKEN(RBRACE);
+RETURN_TOKEN(LBRACE);
 	YY_BREAK
 case 72:
 YY_RULE_SETUP
 #line 163 "lex_sql.l"
-RETURN_TOKEN(LBRACKET);
+last_flag=1; RETURN_TOKEN(RBRACE);
 	YY_BREAK
 case 73:
 YY_RULE_SETUP
 #line 164 "lex_sql.l"
-RETURN_TOKEN(RBRACKET);
+RETURN_TOKEN(LBRACKET);
 	YY_BREAK
 case 74:
 YY_RULE_SETUP
-#line 166 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(COMMA);
+#line 165 "lex_sql.l"
+RETURN_TOKEN(RBRACKET);
 	YY_BREAK
 case 75:
 YY_RULE_SETUP
 #line 167 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(EQ);
+last_flag=0;RETURN_TOKEN(COMMA);
 	YY_BREAK
 case 76:
 YY_RULE_SETUP
 #line 168 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(LE);
+last_flag=0;RETURN_TOKEN(EQ);
 	YY_BREAK
 case 77:
 YY_RULE_SETUP
 #line 169 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(NE);
+last_flag=0;RETURN_TOKEN(LE);
 	YY_BREAK
 case 78:
 YY_RULE_SETUP
@@ -1618,34 +1618,33 @@ last_flag=0;RETURN_TOKEN(NE);
 case 79:
 YY_RULE_SETUP
 #line 171 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(LT);
+last_flag=0;RETURN_TOKEN(NE);
 	YY_BREAK
 case 80:
 YY_RULE_SETUP
 #line 172 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(GE);
+last_flag=0;RETURN_TOKEN(LT);
 	YY_BREAK
 case 81:
 YY_RULE_SETUP
 #line 173 "lex_sql.l"
-last_flag=0;RETURN_TOKEN(GT);
+last_flag=0;RETURN_TOKEN(GE);
 	YY_BREAK
 case 82:
-#line 176 "lex_sql.l"
+YY_RULE_SETUP
+#line 174 "lex_sql.l"
+last_flag=0;RETURN_TOKEN(GT);
+	YY_BREAK
 case 83:
 #line 177 "lex_sql.l"
 case 84:
 #line 178 "lex_sql.l"
 case 85:
-YY_RULE_SETUP
-#line 178 "lex_sql.l"
-{ last_flag=0; return yytext[0]; }
-	YY_BREAK
+#line 179 "lex_sql.l"
 case 86:
-/* rule 86 can match eol */
 YY_RULE_SETUP
 #line 179 "lex_sql.l"
-yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
+{ last_flag=0; return yytext[0]; }
 	YY_BREAK
 case 87:
 /* rule 87 can match eol */
@@ -1654,16 +1653,22 @@ YY_RULE_SETUP
 yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
 	YY_BREAK
 case 88:
+/* rule 88 can match eol */
 YY_RULE_SETUP
-#line 182 "lex_sql.l"
-LOG_DEBUG("Unknown character [%c]",yytext[0]); return yytext[0];
+#line 181 "lex_sql.l"
+yylval->string = strdup(yytext); RETURN_TOKEN(SSS);
 	YY_BREAK
 case 89:
 YY_RULE_SETUP
 #line 183 "lex_sql.l"
+LOG_DEBUG("Unknown character [%c]",yytext[0]); return yytext[0];
+	YY_BREAK
+case 90:
+YY_RULE_SETUP
+#line 184 "lex_sql.l"
 ECHO;
 	YY_BREAK
-#line 1667 "lex_sql.cpp"
+#line 1672 "lex_sql.cpp"
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(STR):
 	yyterminate();
@@ -2819,7 +2824,7 @@ void yyfree (void * ptr , yyscan_t yyscanner)
 
 #define YYTABLES_NAME "yytables"
 
-#line 183 "lex_sql.l"
+#line 184 "lex_sql.l"
 
 
 void scan_string(const char *str, yyscan_t scanner) {

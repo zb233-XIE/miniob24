@@ -117,6 +117,7 @@ INNER                                   RETURN_TOKEN(INNER);
 JOIN                                    RETURN_TOKEN(JOIN);
 WHERE                                   last_flag=0;RETURN_TOKEN(WHERE);
 AND                                     last_flag=0;RETURN_TOKEN(AND);
+OR                                      last_flag=0;RETURN_TOKEN(OR);
 INSERT                                  last_flag=0;RETURN_TOKEN(INSERT);
 INTO                                    last_flag=0;RETURN_TOKEN(INTO);
 VALUES                                  last_flag=0;RETURN_TOKEN(VALUES);

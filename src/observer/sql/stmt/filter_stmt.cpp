@@ -28,12 +28,13 @@ FilterStmt::~FilterStmt()
 }
 
 RC FilterStmt::create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt)
+    const ConditionSqlNode *conditions, int condition_num, FilterStmt *&stmt, int is_and)
 {
   RC rc = RC::SUCCESS;
   stmt  = nullptr;
 
   FilterStmt *tmp_stmt = new FilterStmt();
+  tmp_stmt->is_and_ = is_and;
   for (int i = 0; i < condition_num; i++) {
     FilterUnit *filter_unit = nullptr;
 

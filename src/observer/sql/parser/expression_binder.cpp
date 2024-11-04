@@ -525,10 +525,11 @@ RC ExpressionBinder::bind_subquery_expression(
     tables.push_back(table);
   }
   sub_stmt->set_tables(tables);
-  Stmt::create_stmt(db_, *sub_sqlnode, reinterpret_cast<Stmt*&>(sub_stmt));
+  Stmt *sub_stmt_cast = reinterpret_cast<Stmt*>(sub_stmt);
+  Stmt::create_stmt(db_, *sub_sqlnode, sub_stmt_cast);
 
   // 生成新的表达式
-  BoundSubqueryExpr *bound_subquery_expr = new BoundSubqueryExpr(sub_stmt);
+  BoundSubqueryExpr *bound_subquery_expr = new BoundSubqueryExpr(sub_stmt_cast);
   bound_expressions.emplace_back(bound_subquery_expr);
 
   return RC::SUCCESS;
