@@ -179,9 +179,9 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
         continue;
       }
       index                     = table->find_index_by_field(ub_field_expr->field_name());
-      vector_distance_algorithm = index->index_meta().alrgorithm();
 
       if (index != nullptr) {
+        vector_distance_algorithm = index->index_meta().alrgorithm();
         switch (dis_algorithm) {
           case ArithmeticExpr::Type::L2_DIS: {
             if (vector_distance_algorithm == DISTANCE_ALGO::L2_DISTANCE) {
