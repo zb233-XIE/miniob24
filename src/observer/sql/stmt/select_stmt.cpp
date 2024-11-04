@@ -82,10 +82,15 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
+    if (table_map.count(select_sql.relations[i].alias) != 0) {
+      LOG_WARN("duplicate table alias. alias=%s", select_sql.relations[i].alias.c_str());
+      return RC::TABLE_ALIAS_DUPLICATE;
+    }
     table->set_alias(select_sql.relations[i].alias);
     binder_context.add_table(table);
     tables.push_back(table);
     table_map.insert({table_name, table});
+    table_map.insert({select_sql.relations[i].alias, table});
   }
 
   // 将join语句中的表也加入到tables和table_map中，依葫芦画瓢
