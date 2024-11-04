@@ -38,7 +38,7 @@ Table *BinderContext::find_table(const char *table_name) const
 
 Table *BinderContext::find_table_in_helper_tables(const char *table_name) const
 {
-  auto pred = [table_name](Table *table) { return 0 == strcasecmp(table_name, table->name()); };
+  auto pred = [table_name](Table *table) { return 0 == strcasecmp(table_name, table->name()) || 0 == strcasecmp(table_name, table->alias()); };
   auto iter = ranges::find_if(helper_tables_, pred);
   if (iter == helper_tables_.end()) {
     return nullptr;
@@ -525,10 +525,15 @@ RC ExpressionBinder::bind_subquery_expression(
     tables.push_back(table);
   }
   sub_stmt->set_tables(tables);
-  Stmt::create_stmt(db_, *sub_sqlnode, reinterpret_cast<Stmt*&>(sub_stmt));
+  Stmt *sub_stmt_general = reinterpret_cast<Stmt*>(sub_stmt);
+  RC rc = Stmt::create_stmt(db_, *sub_sqlnode, sub_stmt_general);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create subquery stmt. rc=%s", strrc(rc));
+    return rc;
+  }
 
   // 生成新的表达式
-  BoundSubqueryExpr *bound_subquery_expr = new BoundSubqueryExpr(sub_stmt);
+  BoundSubqueryExpr *bound_subquery_expr = new BoundSubqueryExpr(sub_stmt_general);
   bound_expressions.emplace_back(bound_subquery_expr);
 
   return RC::SUCCESS;
