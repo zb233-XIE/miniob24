@@ -91,7 +91,7 @@ struct ConditionSqlNode
   Expression *right_expr;
 
   // 子查询
-  int is_subquery;
+  int is_subquery = 0;
 
   int flag = 0; // 1表示condition用or连接
 };
