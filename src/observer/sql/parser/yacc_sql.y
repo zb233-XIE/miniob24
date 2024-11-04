@@ -852,12 +852,14 @@ expression_list:
       $$ = new std::vector<std::unique_ptr<Expression>>;
       $$->emplace_back($1);
       $$->back()->set_name($2);
+      $$->back()->set_aliased(true);
       free($2);
     }
     | expression AS ID {
       $$ = new std::vector<std::unique_ptr<Expression>>;
       $$->emplace_back($1);
       $$->back()->set_name($3);
+      $$->back()->set_aliased(true);
       free($3);
     }
     | expression COMMA expression_list

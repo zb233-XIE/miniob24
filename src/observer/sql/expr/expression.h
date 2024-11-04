@@ -130,6 +130,9 @@ public:
    */
   virtual RC eval(Chunk &chunk, std::vector<uint8_t> &select) { return RC::UNIMPLEMENTED; }
 
+  virtual bool is_aliased() const { return aliased_; }
+  virtual void set_aliased(bool aliased) { aliased_ = aliased; }
+
 protected:
   /**
    * @brief 表达式在下层算子返回的 chunk 中的位置
@@ -141,6 +144,7 @@ protected:
 
 private:
   std::string name_;
+  bool        aliased_ = false;
 };
 
 class StarExpr : public Expression

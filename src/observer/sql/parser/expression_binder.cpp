@@ -138,6 +138,10 @@ RC ExpressionBinder::bind_star_expression(
     return RC::SUCCESS;
   }
 
+  if (expr->is_aliased()) {
+    return RC::ALIAS_STAR_EXPR;
+  }
+
   auto star_expr = static_cast<StarExpr *>(expr.get());
 
   vector<Table *> tables_to_wildcard;
