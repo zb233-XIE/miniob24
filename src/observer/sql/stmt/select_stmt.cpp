@@ -229,7 +229,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       &table_map,
       select_sql.conditions.data(),
       static_cast<int>(select_sql.conditions.size()),
-      filter_stmt);
+      filter_stmt, select_sql.is_and);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct filter stmt");
     return rc;
@@ -242,7 +242,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       &table_map,
       subquery_conditions.data(),
       static_cast<int>(subquery_conditions.size()),
-      subquery_stmt);
+      subquery_stmt, select_sql.is_and);
   if (rc != RC::SUCCESS) {
     LOG_WARN("cannot construct subquery stmt");
     return rc;

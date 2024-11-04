@@ -31,12 +31,13 @@ RC SubqueryStmt::create_subquery_unit(Db *db, Table *default_table, std::unorder
 }
 
 RC SubqueryStmt::create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-    const ConditionSqlNode *conditions, int condition_num, SubqueryStmt *&stmt)
+    const ConditionSqlNode *conditions, int condition_num, SubqueryStmt *&stmt, int is_and)
 {
   RC rc = RC::SUCCESS;
   stmt  = nullptr;
 
   SubqueryStmt *tmp_stmt = new SubqueryStmt();
+  tmp_stmt->is_and_ = is_and;
   for (int i = 0; i < condition_num; i++) {
     SubqueryUnit *subquery_unit = nullptr;
 

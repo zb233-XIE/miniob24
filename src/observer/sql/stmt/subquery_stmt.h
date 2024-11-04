@@ -39,13 +39,16 @@ public:
 public:
   const std::vector<SubqueryUnit *> &subquery_units() const { return subquery_units_; }
 
+  int is_and() { return is_and_; }
+
 public:
   static RC create(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
-      const ConditionSqlNode *conditions, int condition_num, SubqueryStmt *&stmt);
+      const ConditionSqlNode *conditions, int condition_num, SubqueryStmt *&stmt, int is_and = 1);
 
   static RC create_subquery_unit(Db *db, Table *default_table, std::unordered_map<std::string, Table *> *tables,
       const ConditionSqlNode &condition, SubqueryUnit *&subquery_unit);
 
 private:
   std::vector<SubqueryUnit *> subquery_units_; // 默认当前都是AND关系
+  int is_and_ = 1;
 };

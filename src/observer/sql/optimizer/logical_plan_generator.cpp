@@ -328,7 +328,8 @@ RC LogicalPlanGenerator::create_plan(FilterStmt *filter_stmt, unique_ptr<Logical
 
   unique_ptr<PredicateLogicalOperator> predicate_oper;
   if (!cmp_exprs.empty()) {
-    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, cmp_exprs));
+    unique_ptr<ConjunctionExpr> conjunction_expr(
+        new ConjunctionExpr(filter_stmt->is_and() ? ConjunctionExpr::Type::AND : ConjunctionExpr::Type::OR, cmp_exprs));
     predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
   }
 
@@ -373,7 +374,8 @@ RC LogicalPlanGenerator::create_plan(SubqueryStmt *subquery_stmt, unique_ptr<Log
 
   unique_ptr<PredicateLogicalOperator> predicate_oper;
   if (!subquery_exprs.empty()) {
-    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(ConjunctionExpr::Type::AND, subquery_exprs));
+    unique_ptr<ConjunctionExpr> conjunction_expr(new ConjunctionExpr(
+        subquery_stmt->is_and() ? ConjunctionExpr::Type::AND : ConjunctionExpr::Type::OR, subquery_exprs));
     predicate_oper = unique_ptr<PredicateLogicalOperator>(new PredicateLogicalOperator(std::move(conjunction_expr)));
   }
 
