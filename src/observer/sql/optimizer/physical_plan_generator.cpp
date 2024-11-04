@@ -186,7 +186,7 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
       if (ub_field_expr == nullptr) {
         continue;
       }
-      index                     = table->find_index_by_field(ub_field_expr->field_name());
+      index = table->find_index_by_field(ub_field_expr->field_name());
 
       if (index != nullptr) {
         vector_distance_algorithm = index->index_meta().alrgorithm();
@@ -229,22 +229,23 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
         continue;
       }
 
-      UnboundFieldExpr *ub_field_expr = nullptr;
+      FieldExpr *field_expr = nullptr;
       if (left_expr->type() == ExprType::FIELD) {
         ASSERT(right_expr->type() == ExprType::VALUE, "right expr should be a value expr while left is field expr");
-        ub_field_expr = static_cast<UnboundFieldExpr *>(left_expr.get());
+        field_expr = static_cast<FieldExpr *>(left_expr.get());
         value_expr = static_cast<ValueExpr *>(right_expr.get());
       } else if (right_expr->type() == ExprType::FIELD) {
         ASSERT(left_expr->type() == ExprType::VALUE, "left expr should be a value expr while right is a field expr");
-        ub_field_expr = static_cast<UnboundFieldExpr *>(right_expr.get());
+        field_expr = static_cast<FieldExpr *>(right_expr.get());
         value_expr = static_cast<ValueExpr *>(left_expr.get());
       }
 
-      if (ub_field_expr == nullptr) {
+      if (field_expr == nullptr) {
         continue;
       }
 
-      index = table->find_index_by_field(ub_field_expr->field_name());
+      const Field &field = field_expr->field();
+      index              = table->find_index_by_field(field.field_name());
       if (nullptr != index) {
         break;
       }
