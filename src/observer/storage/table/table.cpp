@@ -570,7 +570,7 @@ RC Table::create_vector_index(
   }
 
   IndexMeta new_index_meta;
-  RC        rc = new_index_meta.init(index_name, vector<FieldMeta>{field_meta}, false);
+  RC        rc = new_index_meta.init(index_name, vector<FieldMeta>{field_meta}, false, algorithm);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init vector IndexMeta in table:%s, index_name:%s, field_name:%s", 
              name(), index_name, field_meta.name());
