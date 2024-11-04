@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include "sql/parser/parse_defs.h"
 #include "storage/record/record.h"
 #include "storage/table/table_meta.h"
 #include "common/types.h"
@@ -92,6 +93,8 @@ public:
 
   // TODO refactor
   RC create_index(Trx *trx, const std::vector<FieldMeta> &field_meta, const char *index_name, bool unique);
+
+  RC create_vector_index(Trx *trx, const FieldMeta &field_meta, const char *index_name, DISTANCE_ALGO algorithm, int centroids, int probes);
 
   RC get_record_scanner(RecordFileScanner &scanner, Trx *trx, ReadWriteMode mode);
 
