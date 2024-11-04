@@ -115,6 +115,7 @@ public:
   const char *name() const;
 
   void set_alias(std::string alias) { alias_ = alias; }
+  void unset_alias() { alias_.clear(); }
   const char *alias() const { return alias_.c_str(); }
 
   Db *db() const { return db_; }

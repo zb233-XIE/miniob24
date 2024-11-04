@@ -287,6 +287,10 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     order_by_stmt = new OrderByStmt(select_sql.order_by); 
   }
 
+  for (Table *t: tables) {
+    t->unset_alias();
+  }
+
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
 

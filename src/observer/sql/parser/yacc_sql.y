@@ -935,6 +935,9 @@ expression:
     | '*' {
       $$ = new StarExpr();
     }
+    | ID DOT '*' {
+      $$ = new StarExpr($1);
+    }
     // your code here
     // 聚合函数
     | MAX LBRACE agg_fun_attr_list RBRACE {
