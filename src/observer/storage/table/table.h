@@ -16,11 +16,13 @@ See the Mulan PSL v2 for more details. */
 
 #include "storage/record/record.h"
 #include "storage/table/table_meta.h"
+#include "storage/table/view.h"
 #include "common/types.h"
 #include "common/lang/span.h"
 #include "common/lang/functional.h"
 
-#define NULL_MAGIC_NUMBER 0x8D
+#define NULL_CHAR_MAGIC_NUMBER 0x8D
+#define NULL_INT_MAGIC_NUMER 1145141919
 
 struct RID;
 class Record;
@@ -112,11 +114,18 @@ public:
   int32_t     table_id() const { return table_meta_.table_id(); }
   const char *name() const;
 
+  void set_alias(std::string alias) { alias_ = alias; }
+  void unset_alias() { alias_.clear(); }
+  const char *alias() const { return alias_.c_str(); }
+
   Db *db() const { return db_; }
 
   const TableMeta &table_meta() const;
 
   RC sync();
+
+  explicit Table(View *view);
+  View *view() const { return view_; }
 
 private:
   RC insert_entry_of_indexes(const char *record, const RID &rid);
@@ -139,4 +148,6 @@ private:
   DiskBufferPool *data_buffer_pool_  = nullptr;  /// 数据文件关联的buffer pool
   RecordFileHandler *record_handler_ = nullptr;  /// 记录操作
   vector<Index *>    indexes_;
+  std::string        alias_;
+  View               *view_ = nullptr;
 };

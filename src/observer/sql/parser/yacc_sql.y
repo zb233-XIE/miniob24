@@ -120,6 +120,7 @@ bool is_valid_date(const char *date) {
         FROM
         WHERE
         AND
+        OR
         SET
         ON
         LOAD
@@ -154,11 +155,12 @@ bool is_valid_date(const char *date) {
         EXISTS_T
         NOT
         IN_T
-
+        VIEW
         NULL_T
         NOT_NULL_T
 				ORDER_BY
 				ASC
+        AS
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -170,6 +172,7 @@ bool is_valid_date(const char *date) {
   SetClauseSqlNode *                         set_clause;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
+  RelationSqlNode *                          relation;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   // std::vector<Expression *> *                agg_fun_attr_list;
@@ -180,9 +183,10 @@ bool is_valid_date(const char *date) {
   std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *> *  join_tuple_list;
   std::tuple<std::string, std::vector<ConditionSqlNode> *> *  join_tuple;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  std::vector<RelationSqlNode> *             relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
   std::vector<float> *                       vector_elem_list;
+  std::vector<std::string> *                 id_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -203,8 +207,7 @@ bool is_valid_date(const char *date) {
 %type <condition>           condition
 %type <value>               value
 %type <number>              number
-%type <string>              relation
-/* %type <condition>           subquery */
+%type <relation>            relation
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <expression>          agg_fun_attr
@@ -230,6 +233,7 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            update_stmt
 %type <sql_node>            delete_stmt
 %type <sql_node>            create_table_stmt
+%type <sql_node>            create_view_stmt
 %type <sql_node>            drop_table_stmt
 %type <sql_node>            show_tables_stmt
 %type <sql_node>            desc_table_stmt
@@ -245,6 +249,8 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
 %type <sql_node>            command_wrapper
+%type <sql_node>            as_select
+%type <id_list>             id_list
 %type <set_clause>          set_clause
 %type <set_clause_list>     set_clause_list
 %type <nullable_spec>       nullable_spec
@@ -276,6 +282,7 @@ command_wrapper:
   | update_stmt
   | delete_stmt
   | create_table_stmt
+  | create_view_stmt
   | drop_table_stmt
   | show_tables_stmt
   | desc_table_stmt
@@ -291,6 +298,29 @@ command_wrapper:
   | help_stmt
   | exit_stmt
     ;
+
+id_list:
+  {
+    $$ = nullptr;
+  }
+  | ID {
+    $$ = new std::vector<std::string>;
+    $$->emplace_back($1);
+    free($1);
+  }
+  | ID COMMA id_list {
+    if ($3 != nullptr) {
+      $$ = $3;
+    } else {
+      $$ = new std::vector<std::string>;
+    }
+    $$->emplace($$->begin(), $1);
+    free($1);
+  }
+  | LBRACE id_list RBRACE {
+    $$ = $2;
+  }
+  ;
 
 exit_stmt:      
     EXIT {
@@ -356,8 +386,13 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       create_index.index_name = $3;
       create_index.relation_name = $5;
       create_index.unique = false;
+
       if ($7 != nullptr) {
-        create_index.attributes.swap(*$7);
+        std::vector<std::string> attributes;
+        for (auto &rel : *$7) {
+          attributes.emplace_back(rel.name);
+        }
+        create_index.attributes.swap(attributes);
         delete $7;
       }
       free($3);
@@ -370,8 +405,12 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       create_index.index_name = $4;
       create_index.relation_name = $6;
       create_index.unique = true;
-      if ($8 != nullptr) {
-        create_index.attributes.swap(*$8);
+      if ($8 != nullptr) {        
+        std::vector<std::string> attributes;
+        for (auto &rel : *$8) {
+          attributes.emplace_back(rel.name);
+        }
+        create_index.attributes.swap(attributes);
         delete $8;
       }
       free($4);
@@ -389,8 +428,20 @@ drop_index_stmt:      /*drop index 语句的语法解析树*/
       free($5);
     }
     ;
+
+as_select:
+  {
+    $$ = nullptr;
+  }
+  | AS select_stmt {
+    $$ = $2;
+  }
+  | select_stmt {
+    $$ = $1;
+  }
+
 create_table_stmt:    /*create table 语句的语法解析树*/
-    CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE storage_format
+    CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE storage_format as_select
     {
       $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
       CreateTableSqlNode &create_table = $$->create_table;
@@ -410,8 +461,42 @@ create_table_stmt:    /*create table 语句的语法解析树*/
         create_table.storage_format = $8;
         free($8);
       }
+
+      if ($9 != nullptr) {
+        create_table.has_subquery = true;
+        create_table.subquery = $9;
+      } else {
+        create_table.has_subquery = false;
+        create_table.subquery = nullptr;
+      }
     }
-    ;
+    | CREATE TABLE ID as_select {
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
+      CreateTableSqlNode &create_table = $$->create_table;
+      create_table.relation_name = $3;
+      free($3);
+      if ($4 != nullptr) {
+        create_table.has_subquery = true;
+        create_table.subquery = $4;
+      } else {
+        create_table.has_subquery = false;
+        create_table.subquery = nullptr;
+      }
+    }
+
+create_view_stmt:
+  CREATE VIEW ID id_list AS select_stmt {
+    $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+    $$->create_view.view_name = $3;
+    free($3);
+    if ($4 != nullptr) {
+      $$->create_view.col_names.swap(*$4);
+      delete $4;
+    }
+    $$->create_view.selection = $6;
+    $$->create_view.sql_str = $6->sql_str;
+  }
+
 attr_def_list:
     /* empty */
     {
@@ -650,6 +735,7 @@ select_stmt:        /*  select 语句的语法解析树*/
     SELECT expression_list FROM rel_list join_list where group_by having order_by
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
+      $$->sql_str = token_name(sql_string, &@$);
       if ($2 != nullptr) {
         $$->selection.expressions.swap(*$2);
         delete $2;
@@ -671,6 +757,11 @@ select_stmt:        /*  select 语句的语法解析树*/
       }
 
       if ($6 != nullptr) {
+        ConditionSqlNode last = $6->back();
+        if (last.flag) {
+          $6->pop_back();
+          $$->selection.is_and = 0;
+        }
         $$->selection.conditions.swap(*$6);
         delete $6;
       }
@@ -763,6 +854,20 @@ expression_list:
       $$ = new std::vector<std::unique_ptr<Expression>>;
       $$->emplace_back($1);
     }
+    | expression ID {
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+      $$->back()->set_name($2);
+      $$->back()->set_aliased(true);
+      free($2);
+    }
+    | expression AS ID {
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+      $$->back()->set_name($3);
+      $$->back()->set_aliased(true);
+      free($3);
+    }
     | expression COMMA expression_list
     {
       if ($3 != nullptr) {
@@ -771,6 +876,28 @@ expression_list:
         $$ = new std::vector<std::unique_ptr<Expression>>;
       }
       $$->emplace($$->begin(), $1);
+    }
+    | expression ID COMMA expression_list
+    {
+      if ($4 != nullptr) {
+        $$ = $4;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+      $$->back()->set_name($2);
+      free($2);
+    }
+    | expression AS ID COMMA expression_list
+    {
+      if ($5 != nullptr) {
+        $$ = $5;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+      $$->back()->set_name($3);
+      free($3);
     }
     ;
 expression:
@@ -815,6 +942,9 @@ expression:
     }
     | '*' {
       $$ = new StarExpr();
+    }
+    | ID DOT '*' {
+      $$ = new StarExpr($1);
     }
     // your code here
     // 聚合函数
@@ -898,24 +1028,41 @@ rel_attr:
 
 relation:
     ID {
-      $$ = $1;
+      $$ = new RelationSqlNode();
+      $$->name = $1;
+      $$->alias = "";
+      free($1);
+    }
+    | ID ID {
+      $$ = new RelationSqlNode();
+      $$->name = $1;
+      $$->alias = $2;
+      free($1);
+      free($2);
+    }
+    | ID AS ID {
+      $$ = new RelationSqlNode();
+      $$->name = $1;
+      $$->alias = $3;
+      free($1);
+      free($3);
     }
     ;
 rel_list:
     relation {
-      $$ = new std::vector<std::string>();
-      $$->push_back($1);
-      free($1);
+      $$ = new std::vector<RelationSqlNode>();
+      $$->push_back(*$1);
+      delete($1);
     }
     | relation COMMA rel_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new std::vector<RelationSqlNode>;
       }
 
-      $$->insert($$->begin(), $1);
-      free($1);
+      $$->insert($$->begin(), *$1);
+      delete($1);
     }
     ;
 
@@ -941,8 +1088,8 @@ join_list:
 
 join:
     INNER JOIN relation ON condition_list {
-      $$ = new std::tuple<std::string, std::vector<ConditionSqlNode> *>($3, $5);
-      free($3);
+      $$ = new std::tuple<std::string, std::vector<ConditionSqlNode> *>($3->name, $5);
+      delete $3;
     }
 
 where:
@@ -968,6 +1115,15 @@ condition_list:
       $$ = $3;
       $$->emplace_back(*$1);
       delete $1;
+    }
+    | condition OR condition_list {
+      $$ = $3;
+      $$->emplace_back(*$1);
+      ConditionSqlNode *tmp = new ConditionSqlNode;
+      tmp->flag = 1;
+      $$->emplace_back(*tmp);
+      delete $1;
+      delete tmp;
     }
     ;
 condition:

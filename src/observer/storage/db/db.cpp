@@ -23,6 +23,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/os/path.h"
 #include "common/global_context.h"
+#include "sql/stmt/select_stmt.h"
 #include "storage/common/meta_util.h"
 #include "storage/index/index.h"
 #include "storage/table/table.h"
@@ -30,6 +31,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/trx/trx.h"
 #include "storage/clog/disk_log_handler.h"
 #include "storage/clog/integrated_log_replayer.h"
+#include "storage/table/view.h"
 
 using namespace common;
 
@@ -159,6 +161,13 @@ RC Db::create_table(const char *table_name, span<const AttrInfoSqlNode> attribut
 
   opened_tables_[table_name] = table;
   LOG_INFO("Create table success. table name=%s, table_id:%d", table_name, table_id);
+  return RC::SUCCESS;
+}
+
+RC Db::create_view(const char *view_name, const vector<string> &col_names, std::string select_sql_str) {
+  View *view = new View(view_name, col_names, select_sql_str, this);
+  Table *table = new Table(view);
+  opened_tables_[view_name] = table;
   return RC::SUCCESS;
 }
 

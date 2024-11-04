@@ -90,17 +90,20 @@ struct ConditionSqlNode
   
   Expression *right_expr;
 
-  /// 10. 出现子查询
+  // 子查询
   int is_subquery = 0;
-  Expression *expr;
-  ParsedSqlNode *sub_sqlnode;
-  std::vector<Value> values; // where in (1, 2, 3)
-  int left_is_expr = 1;
+
+  int flag = 0; // 1表示condition用or连接
 };
 
 struct OrderByItem {
   RelAttrSqlNode attr;
   bool asc;
+};
+
+struct RelationSqlNode {
+  std::string name;
+  std::string alias;
 };
 
 /**
@@ -117,13 +120,15 @@ struct OrderByItem {
 struct SelectSqlNode
 {
   std::vector<std::unique_ptr<Expression>> expressions;  ///< 查询的表达式
-  std::vector<std::string>                 relations;    ///< 查询的表
+  std::vector<RelationSqlNode>             relations;    ///< 查询的表
   std::vector<ConditionSqlNode>            conditions;   ///< 查询条件，使用AND串联起来多个条件
+  int                                      is_and = 1;
   std::vector<std::unique_ptr<Expression>> group_by;     ///< group by clause
   std::vector<ConditionSqlNode>            having;       /// having条件
   std::vector<OrderByItem>                 order_by;     ///< order by clause
   std::vector<std::string>                     join_relations; /// 参与join的表
   std::vector<std::vector<ConditionSqlNode> *> join_conditions; /// join两表之间的条件
+  std::string                                  sql_str;
 };
 
 /**
@@ -201,6 +206,15 @@ struct CreateTableSqlNode
   std::string                  relation_name;   ///< Relation name
   std::vector<AttrInfoSqlNode> attr_infos;      ///< attributes
   std::string                  storage_format;  ///< storage format
+  bool has_subquery;                            ///< 是否有select子查询
+  ParsedSqlNode *subquery;                      ///< select子查询
+};
+
+struct CreateViewSqlNode {
+  std::string view_name;
+  std::vector<std::string> col_names;
+  ParsedSqlNode *selection;
+  std::string sql_str;
 };
 
 /**
@@ -308,6 +322,7 @@ enum SqlCommandFlag
   SCF_UPDATE,
   SCF_DELETE,
   SCF_CREATE_TABLE,
+  SCF_CREATE_VIEW,
   SCF_DROP_TABLE,
   SCF_CREATE_INDEX,
   SCF_DROP_INDEX,
@@ -346,7 +361,8 @@ public:
   LoadDataSqlNode     load_data;
   ExplainSqlNode      explain;
   SetVariableSqlNode  set_variable;
-
+  CreateViewSqlNode   create_view;
+  std::string         sql_str;
 public:
   ParsedSqlNode();
   explicit ParsedSqlNode(SqlCommandFlag flag);

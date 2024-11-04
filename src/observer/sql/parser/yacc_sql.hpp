@@ -91,50 +91,53 @@ extern int yydebug;
     FROM = 292,                    /* FROM  */
     WHERE = 293,                   /* WHERE  */
     AND = 294,                     /* AND  */
-    SET = 295,                     /* SET  */
-    ON = 296,                      /* ON  */
-    LOAD = 297,                    /* LOAD  */
-    DATA = 298,                    /* DATA  */
-    INFILE = 299,                  /* INFILE  */
-    EXPLAIN = 300,                 /* EXPLAIN  */
-    STORAGE = 301,                 /* STORAGE  */
-    FORMAT = 302,                  /* FORMAT  */
-    EQ = 303,                      /* EQ  */
-    LT = 304,                      /* LT  */
-    GT = 305,                      /* GT  */
-    LE = 306,                      /* LE  */
-    GE = 307,                      /* GE  */
-    NE = 308,                      /* NE  */
-    LK = 309,                      /* LK  */
-    NLK = 310,                     /* NLK  */
-    IS_T = 311,                    /* IS_T  */
-    IS_NOT_T = 312,                /* IS_NOT_T  */
-    MAX = 313,                     /* MAX  */
-    MIN = 314,                     /* MIN  */
-    COUNT = 315,                   /* COUNT  */
-    AVG = 316,                     /* AVG  */
-    SUM = 317,                     /* SUM  */
-    INNER = 318,                   /* INNER  */
-    JOIN = 319,                    /* JOIN  */
-    UNIQUE = 320,                  /* UNIQUE  */
-    LBRACKET = 321,                /* LBRACKET  */
-    RBRACKET = 322,                /* RBRACKET  */
-    L2_DISTANCE = 323,             /* L2_DISTANCE  */
-    COSINE_DISTANCE = 324,         /* COSINE_DISTANCE  */
-    INNER_PRODUCT = 325,           /* INNER_PRODUCT  */
-    EXISTS_T = 326,                /* EXISTS_T  */
-    NOT = 327,                     /* NOT  */
-    IN_T = 328,                    /* IN_T  */
-    NULL_T = 329,                  /* NULL_T  */
-    NOT_NULL_T = 330,              /* NOT_NULL_T  */
-    ORDER_BY = 331,                /* ORDER_BY  */
-    ASC = 332,                     /* ASC  */
-    NUMBER = 333,                  /* NUMBER  */
-    FLOAT = 334,                   /* FLOAT  */
-    ID = 335,                      /* ID  */
-    SSS = 336,                     /* SSS  */
-    DATE = 337,                    /* DATE  */
-    UMINUS = 338                   /* UMINUS  */
+    OR = 295,                      /* OR  */
+    SET = 296,                     /* SET  */
+    ON = 297,                      /* ON  */
+    LOAD = 298,                    /* LOAD  */
+    DATA = 299,                    /* DATA  */
+    INFILE = 300,                  /* INFILE  */
+    EXPLAIN = 301,                 /* EXPLAIN  */
+    STORAGE = 302,                 /* STORAGE  */
+    FORMAT = 303,                  /* FORMAT  */
+    EQ = 304,                      /* EQ  */
+    LT = 305,                      /* LT  */
+    GT = 306,                      /* GT  */
+    LE = 307,                      /* LE  */
+    GE = 308,                      /* GE  */
+    NE = 309,                      /* NE  */
+    LK = 310,                      /* LK  */
+    NLK = 311,                     /* NLK  */
+    IS_T = 312,                    /* IS_T  */
+    IS_NOT_T = 313,                /* IS_NOT_T  */
+    MAX = 314,                     /* MAX  */
+    MIN = 315,                     /* MIN  */
+    COUNT = 316,                   /* COUNT  */
+    AVG = 317,                     /* AVG  */
+    SUM = 318,                     /* SUM  */
+    INNER = 319,                   /* INNER  */
+    JOIN = 320,                    /* JOIN  */
+    UNIQUE = 321,                  /* UNIQUE  */
+    LBRACKET = 322,                /* LBRACKET  */
+    RBRACKET = 323,                /* RBRACKET  */
+    L2_DISTANCE = 324,             /* L2_DISTANCE  */
+    COSINE_DISTANCE = 325,         /* COSINE_DISTANCE  */
+    INNER_PRODUCT = 326,           /* INNER_PRODUCT  */
+    EXISTS_T = 327,                /* EXISTS_T  */
+    NOT = 328,                     /* NOT  */
+    IN_T = 329,                    /* IN_T  */
+    VIEW = 330,                    /* VIEW  */
+    NULL_T = 331,                  /* NULL_T  */
+    NOT_NULL_T = 332,              /* NOT_NULL_T  */
+    ORDER_BY = 333,                /* ORDER_BY  */
+    ASC = 334,                     /* ASC  */
+    AS = 335,                      /* AS  */
+    NUMBER = 336,                  /* NUMBER  */
+    FLOAT = 337,                   /* FLOAT  */
+    ID = 338,                      /* ID  */
+    SSS = 339,                     /* SSS  */
+    DATE = 340,                    /* DATE  */
+    UMINUS = 341                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -143,7 +146,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 164 "yacc_sql.y"
+#line 166 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -153,6 +156,7 @@ union YYSTYPE
   SetClauseSqlNode *                         set_clause;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
+  RelationSqlNode *                          relation;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   // std::vector<Expression *> *                agg_fun_attr_list;
@@ -163,9 +167,10 @@ union YYSTYPE
   std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *> *  join_tuple_list;
   std::tuple<std::string, std::vector<ConditionSqlNode> *> *  join_tuple;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  std::vector<RelationSqlNode> *             relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
   std::vector<float> *                       vector_elem_list;
+  std::vector<std::string> *                 id_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
@@ -173,7 +178,7 @@ union YYSTYPE
   bool                                       nullable_spec;
   bool                                       asc_desc;
 
-#line 177 "yacc_sql.hpp"
+#line 182 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;
