@@ -13,6 +13,10 @@ public:
   Tuple *current_tuple() override;
   RC tuple_schema(TupleSchema &schema) const override;
 
+  const View *get_view() { return view_; }
+  void set_view(View *view) { view_ = view; }
+
 private:
   ValueListTuple tuple_;
+  View *view_;
 };

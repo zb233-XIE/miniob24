@@ -326,6 +326,10 @@ RC PhysicalPlanGenerator::create_plan(ProjectLogicalOperator &project_oper, uniq
     project_operator->set_multi_tables_flag();
   }
 
+  if (project_oper.get_has_view_flag()) {
+    project_operator->set_has_view_flag();
+  }
+
   oper = std::move(project_operator);
 
   LOG_TRACE("create a project physical operator");
@@ -518,6 +522,10 @@ RC PhysicalPlanGenerator::create_plan(ViewGetLogicalOperator &logical_oper, std:
   }
   oper = make_unique<ViewGetPhysicalOperator>();
   oper->add_child(std::move(child_physical_oper));
+  logical_oper.view();
+
+  ViewGetPhysicalOperator *view_get_oper = static_cast<ViewGetPhysicalOperator *>(oper.get());
+  view_get_oper->set_view(logical_oper.view());
 
   return rc;
 }

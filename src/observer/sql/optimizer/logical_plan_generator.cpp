@@ -115,15 +115,18 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   // 在JonLogicalOperator和TableGetLogicalOperator之间插入PredicateLogicalOperator
   size_t idx = 0;
   const std::vector<Table *> &tables = select_stmt->tables();
+  // FIXME: handle view cases of join tables
+  bool has_view_flag = false;
   for (Table *table : tables) {
 
     unique_ptr<LogicalOperator> table_get_oper;
     if (table->view() == nullptr) {
       table_get_oper = make_unique<TableGetLogicalOperator>(table, ReadWriteMode::READ_ONLY);
     } else {
+      has_view_flag = true;
       table_get_oper = make_unique<ViewGetLogicalOperator>(table->view(), ReadWriteMode::READ_ONLY);
       std::unique_ptr<LogicalOperator> view_get_sub_oper;
-      SelectStmt *stmt;
+      SelectStmt *stmt = nullptr;
       RC rc = table->view()->create_select_stmt(stmt);
       if (rc != RC::SUCCESS) {
         LOG_WARN("failed to create view get sub logical operator. rc=%s", strrc(rc));
@@ -229,6 +232,10 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
 
   if (tables.size() > 1) {
     project_oper->set_multi_tables_flag();
+  }
+
+  if (has_view_flag) {
+    project_oper->set_has_view_flag();
   }
 
   unique_ptr<LogicalOperator> order_by_oper;

@@ -885,7 +885,8 @@ expression_list:
         $$ = new std::vector<std::unique_ptr<Expression>>;
       }
       $$->emplace($$->begin(), $1);
-      $$->back()->set_name($2);
+      $$->front()->set_name($2);
+      $$->front()->set_aliased(true);
       free($2);
     }
     | expression AS ID COMMA expression_list
@@ -896,7 +897,8 @@ expression_list:
         $$ = new std::vector<std::unique_ptr<Expression>>;
       }
       $$->emplace($$->begin(), $1);
-      $$->back()->set_name($3);
+      $$->front()->set_name($3);
+      $$->front()->set_aliased(true);
       free($3);
     }
     ;

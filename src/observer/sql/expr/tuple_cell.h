@@ -31,7 +31,8 @@ public:
 
   bool equals(const TupleCellSpec &other) const
   {
-    return table_name_ == other.table_name_ && field_name_ == other.field_name_ && alias_ == other.alias_;
+    return (table_name_ == other.table_name_ && field_name_ == other.field_name_ && alias_ == other.alias_)
+      || (alias_ == other.alias_);
   }
 
 private:

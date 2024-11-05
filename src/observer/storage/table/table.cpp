@@ -274,7 +274,12 @@ RC Table::recover_insert_record(Record &record)
   return rc;
 }
 
-const char *Table::name() const { return table_meta_.name(); }
+const char *Table::name() const {
+  if (view_ != nullptr) {
+    return view_->name().c_str();
+  }
+  return table_meta_.name();
+}
 
 const TableMeta &Table::table_meta() const { return table_meta_; }
 

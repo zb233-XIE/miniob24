@@ -43,6 +43,9 @@ public:
   void set_multi_tables_flag() { multi_tables_flag_ = 1; }
   int get_multi_tables_flag() const { return multi_tables_flag_; }
 
+  void set_has_view_flag() { has_view_flag_ = 1; }
+  int get_has_view_flag() const { return has_view_flag_; }
+
   std::vector<AttrInfoSqlNode> attr_infos() {
     std::vector<AttrInfoSqlNode> attr_infos;
     for (size_t i = 0; i < expressions_.size(); i++) {
@@ -66,4 +69,6 @@ private:
   std::vector<std::unique_ptr<Expression>>     expressions_;
   ExpressionTuple<std::unique_ptr<Expression>> tuple_;
   int multi_tables_flag_ = 0;
+  int has_view_flag_ = 0;
+  ValueListTuple view_tuple_;
 };

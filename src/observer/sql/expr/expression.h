@@ -212,6 +212,8 @@ public:
 
   const char *table_name() const { return field_.table_name(); }
   const char *field_name() const { return field_.field_name(); }
+  int         field_id() const { return field_.field_id(); }
+  const Table *    table() const { return field_.table(); }
 
   RC get_column(Chunk &chunk, Column &column) override;
 
