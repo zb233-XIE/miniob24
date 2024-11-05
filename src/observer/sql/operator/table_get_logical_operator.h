@@ -48,5 +48,5 @@ private:
   // 不包含复杂的表达式运算，比如加减乘除、或者conjunction expression
   // 如果有多个表达式，他们的关系都是 AND
   std::vector<std::unique_ptr<Expression>> predicates_;
-  int                                      limits_; // only for vector search
+  int                                      limits_; // [ATT!] only for vector search index hit
 };

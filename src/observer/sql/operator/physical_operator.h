@@ -61,7 +61,8 @@ enum class PhysicalOperatorType
   SUBQUERY,
   DUMB,
   ORDER_BY,
-  VIEW_GET
+  VIEW_GET,
+  LIMIT,
 };
 
 /**

@@ -66,19 +66,27 @@ select * from items where embedding > '[0, 0, 0, 0, 0]'
 select embedding + [1.5, 2.3, 3.3, 4, 5.76], embedding - [0, 0, 0, 0, 0], [0, 0, 0, 0, 0] - embedding from items where embedding > [0, 0, 0, 0, 0];
 
 // vector-rewrite
+[CASE 1]
 CREATE TABLE items (id int, embedding vector(3));
 CREATE VECTOR INDEX vector_idx ON items (embedding) WITH (distance=l2_distance, type=ivfflat, lists=245, probes=5);
 EXPLAIN SELECT * FROM items ORDER BY L2_DISTANCE('[1,2,3]', embedding) LIMIT 3;
+[ANSWER]
 
+[CASE 2]
+CREATE TABLE TEST (ID INT, C1 VECTOR(3));
+CREATE VECTOR INDEX V_I ON TEST(C1) WITH(TYPE=IVFFLAT, DISTANCE=L2_DISTANCE, LISTS=1, PROBES=1);
+EXPLAIN SELECT C1, L2_DISTANCE(C1, '[1,2,3]') FROM TEST ORDER BY L2_DISTANCE(C1, '[1,2,3]') LIMIT 3;
+[ANSWER]
+- PROJECT
+- └─VECTOR_INDEX_SCAN(V_I ON TEST)
 
-select column_name1,column_name2, ... from table_name order by vector_distance_func(vector_column_name, '[float0,float1,……]') limit K;
-EXPLAIN SELECT C1, L2_DISTANCE(C1, '[1,2,3]') FROM TEST ORDER BY L2_DISTANCE('[1,2,3]', C1) LIMIT 3;
-
-Query Plan
-OPERATOR(NAME)
-PROJECT
-└─VECTOR_INDEX_SCAN(V_I ON TEST)
-
-CREATE TABLE test (id int, age int);
-create index idx on test (age);
-select id from test order by age
+[CASE 3]
+CREATE TABLE TEST2 (ID INT, C1 VECTOR(3));
+EXPLAIN SELECT C1, L2_DISTANCE(C1, '[1,2,3]') FROM TEST2 ORDER BY L2_DISTANCE(C1, '[1,2,3]') LIMIT 3;
+[ANSWER]
+- Query Plan
+- OPERATOR(NAME)
+- PROJECT
+- └─LIMIT
+- └─ORDER_BY
+- └─TABLE_SCAN(TEST2)
