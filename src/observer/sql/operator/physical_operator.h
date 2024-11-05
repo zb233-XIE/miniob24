@@ -60,7 +60,8 @@ enum class PhysicalOperatorType
   EXPR_VEC,
   SUBQUERY,
   DUMB,
-  ORDER_BY
+  ORDER_BY,
+  LIMIT,
 };
 
 /**

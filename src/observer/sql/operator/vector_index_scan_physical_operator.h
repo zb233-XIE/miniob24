@@ -28,7 +28,7 @@ class VectorIndexScanPhysicalOperator : public PhysicalOperator
 {
 public:
   VectorIndexScanPhysicalOperator(Table *table, Index *index, ReadWriteMode mode, Value *feature_vector,
-      DISTANCE_ALGO distance_algorithm, int limits);
+      DISTANCE_ALGO distance_algorithm, int limits = -1);
 
   virtual ~VectorIndexScanPhysicalOperator() = default;
 

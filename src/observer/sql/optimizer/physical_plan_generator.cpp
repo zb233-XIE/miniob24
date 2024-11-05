@@ -48,12 +48,17 @@ See the Mulan PSL v2 for more details. */
 #include "sql/operator/hash_group_by_physical_operator.h"
 #include "sql/operator/scalar_group_by_physical_operator.h"
 #include "sql/operator/table_scan_vec_physical_operator.h"
+#include "sql/operator/update_logical_operator.h"
 #include "sql/operator/update_physical_operator.h"
 #include "sql/optimizer/physical_plan_generator.h"
 #include "sql/operator/dumb_logical_operator.h"
 #include "sql/operator/dumb_physical_operator.h"
 #include "sql/parser/parse_defs.h"
+#include "sql/operator/order_by_logical_operator.h"
 #include "sql/operator/order_by_physical_operator.h"
+#include "sql/operator/limit_logical_operator.h"
+#include "sql/operator/limit_physical_operator.h"
+
 #include "storage/index/index.h"
 
 using namespace std;
@@ -111,6 +116,10 @@ RC PhysicalPlanGenerator::create(LogicalOperator &logical_operator, unique_ptr<P
       return create_plan(static_cast<OrderByLogicalOperator &>(logical_operator), oper);
     } break;
 
+    case LogicalOperatorType::LIMIT: {
+      return create_plan(static_cast<LimitLogicalOperator &>(logical_operator), oper);
+    }
+
     default: {
       ASSERT(false, "unknown logical operator type");
       return RC::INVALID_ARGUMENT;
@@ -158,9 +167,9 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
   for (auto &expr : predicates) {
     if (expr->type() == ExprType::ARITHMETIC) {
       // only for vector type arithmatic
+      // index hit, already checked in generate_logical_plan
       auto vector_arith_expr = static_cast<ArithmeticExpr *>(expr.get());
 
-      auto                    dis_algorithm = vector_arith_expr->arithmetic_type();
       unique_ptr<Expression> &left_expr     = vector_arith_expr->left();
       unique_ptr<Expression> &right_expr    = vector_arith_expr->right();
 
@@ -174,39 +183,14 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
         ub_field_expr = static_cast<UnboundFieldExpr *>(right_expr.get());
         value_expr    = static_cast<ValueExpr *>(left_expr.get());
       }
+      ASSERT(ub_field_expr != nullptr, "");
 
-      if (ub_field_expr == nullptr) {
-        continue;
-      }
       index = table->find_index_by_field(ub_field_expr->field_name());
+      ASSERT(index != nullptr, "");
 
-      if (index != nullptr) {
-        vector_distance_algorithm = index->index_meta().alrgorithm();
-        switch (dis_algorithm) {
-          case ArithmeticExpr::Type::L2_DIS: {
-            if (vector_distance_algorithm == DISTANCE_ALGO::L2_DISTANCE) {
-              vector_index_hit = true;
-            }
-          } break;
-          case ArithmeticExpr::Type::COS_DIS: {
-            if (vector_distance_algorithm == DISTANCE_ALGO::COSINE_DISTANCE) {
-              vector_index_hit = true;
-            }
-          } break;
-          case ArithmeticExpr::Type::INN_PDT: {
-            if (vector_distance_algorithm == DISTANCE_ALGO::INNER_PRODUCT) {
-              vector_index_hit = true;
-            }
-          } break;
-          default: {
-            vector_index_hit = false;
-            index            = nullptr;
-          }
-        }
-      }
-      if (vector_index_hit) {
-        break;
-      }
+      vector_distance_algorithm = index->index_meta().alrgorithm();
+      vector_index_hit          = true;
+      break;
     } else if (expr->type() == ExprType::COMPARISON) {
       auto comparison_expr = static_cast<ComparisonExpr *>(expr.get());
       // 简单处理，就找等值查询
@@ -561,6 +545,24 @@ RC PhysicalPlanGenerator::create_plan(OrderByLogicalOperator &logical_oper, std:
   oper                                   = std::unique_ptr<PhysicalOperator>(order_by_oper);
 
   LogicalOperator             &child_oper = *logical_oper.children().front();
+  unique_ptr<PhysicalOperator> child_physical_oper;
+  rc = create(child_oper, child_physical_oper);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create child physical operator of order by operator. rc=%s", strrc(rc));
+    return rc;
+  }
+  oper->add_child(std::move(child_physical_oper));
+  return rc;
+}
+
+RC PhysicalPlanGenerator::create_plan(LimitLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
+{
+  RC rc = RC::SUCCESS;
+
+  LimitPhysicalOperator *limit_oper = new LimitPhysicalOperator(logical_oper.limits());
+  oper = std::unique_ptr<PhysicalOperator>(limit_oper);
+
+  LogicalOperator &child_oper = *logical_oper.children().front();
   unique_ptr<PhysicalOperator> child_physical_oper;
   rc = create(child_oper, child_physical_oper);
   if (rc != RC::SUCCESS) {
