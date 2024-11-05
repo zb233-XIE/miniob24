@@ -976,7 +976,7 @@ order_by_item:
 limit:
   /* empty */
   {
-    $$ = INT_MAX; // set to a large number
+    $$ = -1; // set to invalid number
   }
   | LIMIT NUMBER
   {
