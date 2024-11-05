@@ -351,7 +351,6 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   }
     last_oper = &project_oper;
 
-    unique_ptr<LogicalOperator> order_by_oper;
     rc = create_plan(select_stmt->order_by(), order_by_oper);
     if (OB_FAIL(rc)) {
       LOG_WARN("failed to create order by logical plan. rc=%s", strrc(rc));
