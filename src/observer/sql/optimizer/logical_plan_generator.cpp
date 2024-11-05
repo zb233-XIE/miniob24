@@ -153,7 +153,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
         auto       *order_by_stmt  = select_stmt->order_by();
         const auto &order_by_items = order_by_stmt->items();
         if (order_by_items.size() == 1 && order_by_items[0].expression != nullptr) {
-          vector_order_by         = true;
+          vector_order_by = true;
           // treat vector type order by specially
           // eg. SELECT embedding FROM items ORDER BY L2_DISTANCE('[1,2,3]', C1) LIMIT 3;
           // if index hit in: project -> vector_index_scan
@@ -202,7 +202,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
                 }
               }
 
-              if(vector_order_by_index_hit){
+              if (vector_order_by_index_hit) {
                 unique_ptr<Expression>                   exp(vector_arith_expr);
                 std::vector<std::unique_ptr<Expression>> predicate_vector;
                 predicate_vector.push_back(std::move(exp));
@@ -211,7 +211,7 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
             }
           }
 
-          if(vector_order_by_index_hit){
+          if (vector_order_by_index_hit) {
             table_get_oper_ptr->set_limit(select_stmt->limits());
           } else {
             table_get_oper_ptr->set_limit(-1);
@@ -241,110 +241,128 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }
   }
 
+  // definitions for all possible logical operators
+  RC                          rc = RC::SUCCESS;
+  unique_ptr<LogicalOperator> order_by_oper;
+  unique_ptr<LogicalOperator> limit_oper;
+  unique_ptr<LogicalOperator> project_oper;
   unique_ptr<LogicalOperator> predicate_oper;
-
-  RC rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
-    return rc;
-  }
-
-  if (predicate_oper) {
-    if (*last_oper) {
-      predicate_oper->add_child(std::move(*last_oper));
-    }
-
-    last_oper = &predicate_oper;
-  }
-
   // 子查询的predicate_oper2
   unique_ptr<LogicalOperator> predicate_oper2;
-
-  rc = create_plan(select_stmt->subquery_stmt(), predicate_oper2);
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
-    return rc;
-  }
-
-  if (predicate_oper2) {
-    if (*last_oper) {
-      predicate_oper2->add_child(std::move(*last_oper));
-    }
-
-    last_oper = &predicate_oper2;
-  }
-
   // having
   unique_ptr<LogicalOperator> having_predicate_oper;
-  rc = create_plan(select_stmt->having_filter_stmt(), having_predicate_oper);
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
-    return rc;
-  }
-
-  unique_ptr<Expression> having_expression;
-  if (having_predicate_oper) {
-    having_expression = std::move(having_predicate_oper->expressions().front());
-  }
-
+  unique_ptr<Expression>      having_expression;
   unique_ptr<LogicalOperator> group_by_oper;
-  rc = create_group_by_plan(select_stmt, group_by_oper, having_expression);
-  if (OB_FAIL(rc)) {
-    LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
-    return rc;
-  }
 
-  if (group_by_oper) {
-    if (*last_oper) {
-      group_by_oper->add_child(std::move(*last_oper));
+  if (vector_order_by) {
+    // index not hit: project -> limit -> order_by
+    // index hit: project -> vector_index_scan
+    if (!vector_order_by_index_hit) {
+      rc = create_plan(select_stmt->order_by(), order_by_oper);
+      if (OB_FAIL(rc)) {
+        LOG_WARN("failed to create order by logical plan. rc=%s", strrc(rc));
+        return rc;
+      }
+      ASSERT(order_by_oper != nullptr, "");
+      ASSERT(*last_oper != nullptr, "");
+      order_by_oper->add_child(std::move(*last_oper));
+      last_oper = &order_by_oper;
+
+      rc = create_limit_plan(vector_order_by_limit, limit_oper);
+      if (OB_FAIL(rc)) {
+        LOG_WARN("failed to create limit logical plan for vector serach");
+        return rc;
+      }
+      ASSERT(limit_oper != nullptr,"");
+      ASSERT(*last_oper != nullptr, "");
+      limit_oper->add_child(std::move(*last_oper));
+      last_oper = &limit_oper;
     }
-    last_oper = &group_by_oper;
-  }
 
-  unique_ptr<LogicalOperator> project_oper;
-  project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
-  ASSERT(project_oper != nullptr, "");
-  if (*last_oper) {
+    project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
+    ASSERT(project_oper != nullptr, "");
+    ASSERT(*last_oper != nullptr, "");
     project_oper->add_child(std::move(*last_oper));
-  }
-  if (tables.size() > 1) {
-    auto * project_oper_ptr = dynamic_cast<ProjectLogicalOperator *>(project_oper.get());
-    project_oper_ptr->set_multi_tables_flag();
-  }
+    last_oper = &project_oper;
+  } else {
+    rc = create_plan(select_stmt->filter_stmt(), predicate_oper);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    if (predicate_oper) {
+      if (*last_oper) {
+        predicate_oper->add_child(std::move(*last_oper));
+      }
+
+      last_oper = &predicate_oper;
+    }
+
+    rc = create_plan(select_stmt->subquery_stmt(), predicate_oper2);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    if (predicate_oper2) {
+      if (*last_oper) {
+        predicate_oper2->add_child(std::move(*last_oper));
+      }
+
+      last_oper = &predicate_oper2;
+    }
+
+    rc = create_plan(select_stmt->having_filter_stmt(), having_predicate_oper);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to create predicate logical plan. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    if (having_predicate_oper) {
+      having_expression = std::move(having_predicate_oper->expressions().front());
+    }
+
+    rc = create_group_by_plan(select_stmt, group_by_oper, having_expression);
+    if (OB_FAIL(rc)) {
+      LOG_WARN("failed to create group by logical plan. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    if (group_by_oper) {
+      if (*last_oper) {
+        group_by_oper->add_child(std::move(*last_oper));
+      }
+      last_oper = &group_by_oper;
+    }
+
+    project_oper = make_unique<ProjectLogicalOperator>(std::move(select_stmt->query_expressions()));
+    ASSERT(project_oper != nullptr, "");
+    if (*last_oper) {
+      project_oper->add_child(std::move(*last_oper));
+    }
+    if (tables.size() > 1) {
+      auto *project_oper_ptr = dynamic_cast<ProjectLogicalOperator *>(project_oper.get());
+      project_oper_ptr->set_multi_tables_flag();
+    }
 
   if (has_view_flag) {
     project_oper->set_has_view_flag();
   }
-  last_oper = &project_oper;
+    last_oper = &project_oper;
 
-  unique_ptr<LogicalOperator> order_by_oper;
-  if (!vector_order_by_index_hit) {
+    unique_ptr<LogicalOperator> order_by_oper;
     rc = create_plan(select_stmt->order_by(), order_by_oper);
     if (OB_FAIL(rc)) {
       LOG_WARN("failed to create order by logical plan. rc=%s", strrc(rc));
       return rc;
     }
-  }
-  if (order_by_oper) {
-    order_by_oper->add_child(std::move(*last_oper));
-    last_oper = &order_by_oper;
-  }
-
-  if (vector_order_by && !vector_order_by_index_hit) {
-    // order by operator must exist!
-    unique_ptr<LogicalOperator> limit_oper;
-    rc = create_limit_plan(vector_order_by_limit, limit_oper);
-    if (OB_FAIL(rc)) {
-      LOG_WARN("failed to create limit logical plan for vector serach");
-      return rc;
+    if (order_by_oper) {
+      order_by_oper->add_child(std::move(*last_oper));
+      last_oper = &order_by_oper;
     }
-    ASSERT(limit_oper != nullptr,"");
-    ASSERT(*last_oper != nullptr, "");
-    limit_oper->add_child(std::move(*last_oper));
-    logical_operator = std::move(limit_oper);
-  } else {
-    logical_operator = std::move(*last_oper);
   }
+  logical_operator = std::move(*last_oper);
 
   return RC::SUCCESS;
 }
