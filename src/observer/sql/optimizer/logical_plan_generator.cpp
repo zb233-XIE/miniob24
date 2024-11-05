@@ -18,6 +18,8 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 #include <utility>
 #include <vector>
+#include <utility>
+#include <vector>
 
 #include "common/rc.h"
 #include "sql/expr/expression.h"
@@ -347,7 +349,8 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
     }
 
   if (has_view_flag) {
-    project_oper->set_has_view_flag();
+    auto *project_oper_ptr = dynamic_cast<ProjectLogicalOperator *>(project_oper.get());
+    project_oper_ptr->set_has_view_flag();
   }
     last_oper = &project_oper;
 

@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <stdio.h>
 #include <time.h>
-#include <string.h>
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
@@ -399,7 +398,6 @@ create_index_stmt:    /*create index 语句的语法解析树*/
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
-      create_index.index_name = 
       create_index.index_name = $3;
       create_index.relation_name = $5;
       create_index.unique = false;
@@ -442,7 +440,7 @@ create_vector_index_stmt:
       CreateVectorIndexSqlNode &create_vector_index = $$->create_vector_index;
       create_vector_index.index_name    = $4;
       free($4);
-      create_vector_index.relation_name = $6;
+      create_vector_index.relation_name = $6->name;
       free($6);
       create_vector_index.attribute     = $8;
       free($8);
