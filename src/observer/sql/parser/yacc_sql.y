@@ -441,7 +441,6 @@ create_vector_index_stmt:
       create_vector_index.index_name    = $4;
       free($4);
       create_vector_index.relation_name = $6->name;
-      free($6);
       create_vector_index.attribute     = $8;
       free($8);
 
