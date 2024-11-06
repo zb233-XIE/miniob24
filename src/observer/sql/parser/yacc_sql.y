@@ -272,6 +272,7 @@ bool is_valid_date(const char *date) {
 %type  <number>             limit
 %type <order_by_list>       order_by_list
 %type <order_by_list>       order_by
+%type <string>              id_maybe_keyword
 
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
@@ -314,16 +315,40 @@ command_wrapper:
   | exit_stmt
     ;
 
+id_maybe_keyword:
+  ID {
+    $$ = $1;
+  }
+  | DATA {
+    $$ = strdup("data");
+  }
+  | MIN {
+    $$ = strdup("min");
+  }
+  | MAX {
+    $$ = strdup("max");
+  }
+  | AVG {
+    $$ = strdup("avg");
+  }
+  | SUM {
+    $$ = strdup("sum");
+  }
+  | COUNT {
+    $$ = strdup("count");
+  }
+
+
 id_list:
   {
     $$ = nullptr;
   }
-  | ID {
+  | id_maybe_keyword {
     $$ = new std::vector<std::string>;
     $$->emplace_back($1);
     free($1);
   }
-  | ID COMMA id_list {
+  | id_maybe_keyword COMMA id_list {
     if ($3 != nullptr) {
       $$ = $3;
     } else {
@@ -373,7 +398,7 @@ rollback_stmt:
     ;
 
 drop_table_stmt:    /*drop table 语句的语法解析树*/
-    DROP TABLE ID {
+    DROP TABLE id_maybe_keyword {
       $$ = new ParsedSqlNode(SCF_DROP_TABLE);
       $$->drop_table.relation_name = $3;
       free($3);
@@ -386,7 +411,7 @@ show_tables_stmt:
     ;
 
 desc_table_stmt:
-    DESC ID  {
+    DESC id_maybe_keyword  {
       $$ = new ParsedSqlNode(SCF_DESC_TABLE);
       $$->desc_table.relation_name = $2;
       free($2);
@@ -394,7 +419,7 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE rel_list RBRACE
+    CREATE INDEX id_maybe_keyword ON id_maybe_keyword LBRACE rel_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
@@ -413,7 +438,7 @@ create_index_stmt:    /*create index 语句的语法解析树*/
       free($3);
       free($5);
     }
-    | CREATE UNIQUE INDEX ID ON ID LBRACE rel_list RBRACE
+    | CREATE UNIQUE INDEX id_maybe_keyword ON id_maybe_keyword LBRACE rel_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
@@ -551,7 +576,7 @@ vector_index_field:
     ;
 
 drop_index_stmt:      /*drop index 语句的语法解析树*/
-    DROP INDEX ID ON ID
+    DROP INDEX id_maybe_keyword ON id_maybe_keyword
     {
       $$ = new ParsedSqlNode(SCF_DROP_INDEX);
       $$->drop_index.index_name = $3;
@@ -573,7 +598,7 @@ as_select:
   }
 
 create_table_stmt:    /*create table 语句的语法解析树*/
-    CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE storage_format as_select
+    CREATE TABLE id_maybe_keyword LBRACE attr_def attr_def_list RBRACE storage_format as_select
     {
       $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
       CreateTableSqlNode &create_table = $$->create_table;
@@ -602,7 +627,7 @@ create_table_stmt:    /*create table 语句的语法解析树*/
         create_table.subquery = nullptr;
       }
     }
-    | CREATE TABLE ID as_select {
+    | CREATE TABLE id_maybe_keyword as_select {
       $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
       CreateTableSqlNode &create_table = $$->create_table;
       create_table.relation_name = $3;
@@ -617,7 +642,7 @@ create_table_stmt:    /*create table 语句的语法解析树*/
     }
 
 create_view_stmt:
-  CREATE VIEW ID id_list AS select_stmt {
+  CREATE VIEW id_maybe_keyword id_list AS select_stmt {
     $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
     $$->create_view.view_name = $3;
     free($3);
@@ -647,7 +672,7 @@ attr_def_list:
     ;
     
 attr_def:
-  ID type LBRACE number RBRACE nullable_spec
+  id_maybe_keyword type LBRACE number RBRACE nullable_spec
   {
     $$ = new AttrInfoSqlNode;
     $$->type = (AttrType)$2;
@@ -656,7 +681,7 @@ attr_def:
     $$->nullable = $6;
     free($1);
   }
-  | ID type nullable_spec
+  | id_maybe_keyword type nullable_spec
   {
     $$ = new AttrInfoSqlNode;
     $$->type = (AttrType)$2;
@@ -693,7 +718,7 @@ type:
     | TEXT_T   { $$ = static_cast<int>(AttrType::TEXTS); }
     ;
 insert_stmt:        /*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE 
+    INSERT INTO id_maybe_keyword VALUES LBRACE value value_list RBRACE 
     {
       $$ = new ParsedSqlNode(SCF_INSERT);
       $$->insertion.relation_name = $3;
@@ -792,14 +817,14 @@ storage_format:
     {
       $$ = nullptr;
     }
-    | STORAGE FORMAT EQ ID
+    | STORAGE FORMAT EQ id_maybe_keyword
     {
       $$ = $4;
     }
     ;
     
 delete_stmt:    /*  delete 语句的语法解析树*/
-    DELETE FROM ID where 
+    DELETE FROM id_maybe_keyword where 
     {
       $$ = new ParsedSqlNode(SCF_DELETE);
       $$->deletion.relation_name = $3;
@@ -811,7 +836,7 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-  UPDATE ID SET set_clause_list where 
+  UPDATE id_maybe_keyword SET set_clause_list where 
   {
     $$ = new ParsedSqlNode(SCF_UPDATE);
     $$->update.relation_name = $2;
@@ -846,7 +871,7 @@ set_clause_list:
   ;
 
 set_clause:
-  ID EQ value {
+  id_maybe_keyword EQ value {
     $$ = new SetClauseSqlNode;
     $$->attribute_name = $1;
     $$->value = *$3;
@@ -855,7 +880,7 @@ set_clause:
     free($1);
     delete $3;
   }
-  | ID EQ LBRACE select_stmt RBRACE {
+  | id_maybe_keyword EQ LBRACE select_stmt RBRACE {
     $$ = new SetClauseSqlNode;
     $$->attribute_name = $1;
     $$->has_subquery = true;
@@ -1010,14 +1035,14 @@ expression_list:
       $$ = new std::vector<std::unique_ptr<Expression>>;
       $$->emplace_back($1);
     }
-    | expression ID {
+    | expression id_maybe_keyword {
       $$ = new std::vector<std::unique_ptr<Expression>>;
       $$->emplace_back($1);
       $$->back()->set_name($2);
       $$->back()->set_aliased(true);
       free($2);
     }
-    | expression AS ID {
+    | expression AS id_maybe_keyword {
       $$ = new std::vector<std::unique_ptr<Expression>>;
       $$->emplace_back($1);
       $$->back()->set_name($3);
@@ -1033,7 +1058,7 @@ expression_list:
       }
       $$->emplace($$->begin(), $1);
     }
-    | expression ID COMMA expression_list
+    | expression id_maybe_keyword COMMA expression_list
     {
       if ($4 != nullptr) {
         $$ = $4;
@@ -1045,7 +1070,7 @@ expression_list:
       $$->front()->set_aliased(true);
       free($2);
     }
-    | expression AS ID COMMA expression_list
+    | expression AS id_maybe_keyword COMMA expression_list
     {
       if ($5 != nullptr) {
         $$ = $5;
@@ -1056,40 +1081,6 @@ expression_list:
       $$->front()->set_name($3);
       $$->front()->set_aliased(true);
       free($3);
-    }
-    | expression DATA {
-      $$ = new std::vector<std::unique_ptr<Expression>>;
-      $$->emplace_back($1);
-      $$->back()->set_name("data");
-      $$->back()->set_aliased(true);
-    }
-    | expression AS DATA {
-      $$ = new std::vector<std::unique_ptr<Expression>>;
-      $$->emplace_back($1);
-      $$->back()->set_name("data");
-      $$->back()->set_aliased(true);
-    }
-    | expression DATA COMMA expression_list
-    {
-      if ($4 != nullptr) {
-        $$ = $4;
-      } else {
-        $$ = new std::vector<std::unique_ptr<Expression>>;
-      }
-      $$->emplace($$->begin(), $1);
-      $$->front()->set_name("data");
-      $$->front()->set_aliased(true);
-    }
-    | expression AS DATA COMMA expression_list
-    {
-      if ($5 != nullptr) {
-        $$ = $5;
-      } else {
-        $$ = new std::vector<std::unique_ptr<Expression>>;
-      }
-      $$->emplace($$->begin(), $1);
-      $$->front()->set_name("data");
-      $$->front()->set_aliased(true);
     }
     ;
 expression:
@@ -1135,7 +1126,7 @@ expression:
     | '*' {
       $$ = new StarExpr();
     }
-    | ID DOT '*' {
+    | id_maybe_keyword DOT '*' {
       $$ = new StarExpr($1);
     }
     // your code here
@@ -1204,12 +1195,12 @@ agg_fun_attr:
     ;
 
 rel_attr:
-    ID {
+    id_maybe_keyword {
       $$ = new RelAttrSqlNode;
       $$->attribute_name = $1;
       free($1);
     }
-    | ID DOT ID {
+    | id_maybe_keyword DOT id_maybe_keyword {
       $$ = new RelAttrSqlNode;
       $$->relation_name  = $1;
       $$->attribute_name = $3;
@@ -1219,20 +1210,20 @@ rel_attr:
     ;
 
 relation:
-    ID {
+    id_maybe_keyword {
       $$ = new RelationSqlNode();
       $$->name = $1;
       $$->alias = "";
       free($1);
     }
-    | ID ID {
+    | id_maybe_keyword id_maybe_keyword {
       $$ = new RelationSqlNode();
       $$->name = $1;
       $$->alias = $2;
       free($1);
       free($2);
     }
-    | ID AS ID {
+    | id_maybe_keyword AS id_maybe_keyword {
       $$ = new RelationSqlNode();
       $$->name = $1;
       $$->alias = $3;
@@ -1511,7 +1502,7 @@ having:
     }
 
 load_data_stmt:
-    LOAD DATA INFILE SSS INTO TABLE ID 
+    LOAD DATA INFILE SSS INTO TABLE id_maybe_keyword 
     {
       char *tmp_file_name = common::substr($4, 1, strlen($4) - 2);
       
@@ -1532,7 +1523,7 @@ explain_stmt:
     ;
 
 set_variable_stmt:
-    SET ID EQ value
+    SET id_maybe_keyword EQ value
     {
       $$ = new ParsedSqlNode(SCF_SET_VARIABLE);
       $$->set_variable.name  = $2;
