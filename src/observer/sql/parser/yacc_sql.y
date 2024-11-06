@@ -1057,6 +1057,40 @@ expression_list:
       $$->front()->set_aliased(true);
       free($3);
     }
+    | expression DATA {
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+      $$->back()->set_name("data");
+      $$->back()->set_aliased(true);
+    }
+    | expression AS DATA {
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+      $$->back()->set_name("data");
+      $$->back()->set_aliased(true);
+    }
+    | expression DATA COMMA expression_list
+    {
+      if ($4 != nullptr) {
+        $$ = $4;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+      $$->front()->set_name("data");
+      $$->front()->set_aliased(true);
+    }
+    | expression AS DATA COMMA expression_list
+    {
+      if ($5 != nullptr) {
+        $$ = $5;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+      $$->front()->set_name("data");
+      $$->front()->set_aliased(true);
+    }
     ;
 expression:
     expression '+' expression {
