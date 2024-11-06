@@ -185,6 +185,24 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
       } else {
         Value casted_value;
         RC    rc = Value::cast_to(values[i], update_fields[i].type(), casted_value);
+        // case a non-numerical string into 
+        if (values[i].attr_type() == AttrType::CHARS && (update_fields[i].type() == AttrType::INTS || update_fields[i].type() == AttrType::FLOATS)) {
+          std::string str_value = values[i].get_string();
+          char* endptr = nullptr;
+          if (update_fields[i].type() == AttrType::INTS) {
+            strtol(str_value.c_str(), &endptr, 10);
+            if (*endptr != '\0') {
+              LOG_WARN("failed to cast non-numeric string to int. value=%s", str_value.c_str());
+              return RC::INVALID_ARGUMENT;
+            }
+          } else if (update_fields[i].type() == AttrType::FLOATS) {
+            strtof(str_value.c_str(), &endptr);
+            if (*endptr != '\0') {
+              LOG_WARN("failed to cast non-numeric string to float. value=%s", str_value.c_str());
+              return RC::INVALID_ARGUMENT;
+            }
+          }
+        }
         if (rc == RC::SUCCESS) {
           values[i] = casted_value;
         } else {
