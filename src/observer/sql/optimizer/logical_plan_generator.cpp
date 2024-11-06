@@ -524,7 +524,25 @@ RC LogicalPlanGenerator::create_plan(DeleteStmt *delete_stmt, unique_ptr<Logical
 {
   Table                      *table       = delete_stmt->table();
   FilterStmt                 *filter_stmt = delete_stmt->filter_stmt();
-  unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
+  unique_ptr<LogicalOperator> table_get_oper;
+  if (table->view() != nullptr) {
+    table_get_oper.reset(new ViewGetLogicalOperator(table->view(), ReadWriteMode::READ_WRITE));
+    SelectStmt *stmt = nullptr;
+    std::unique_ptr<LogicalOperator> view_get_sub_oper;
+    RC rc = table->view()->create_select_stmt(stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("delete view failed to create view get sub logical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+    rc = create_plan(stmt, view_get_sub_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("delete view failed to create view get sub logical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+    table_get_oper->add_child(std::move(view_get_sub_oper));
+  } else {
+    table_get_oper.reset(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
+  }
 
   unique_ptr<LogicalOperator> predicate_oper;
 
@@ -554,7 +572,25 @@ RC LogicalPlanGenerator::create_plan(UpdateStmt *update_stmt, unique_ptr<Logical
   std::vector<FieldMeta> fields                = update_stmt->fields();
   bool                   update_internal_error = update_stmt->update_internal_error();
 
-  unique_ptr<LogicalOperator> table_get_oper(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
+  unique_ptr<LogicalOperator> table_get_oper;
+  if (table->view() != nullptr) {
+    table_get_oper.reset(new ViewGetLogicalOperator(table->view(), ReadWriteMode::READ_WRITE));
+    SelectStmt *stmt = nullptr;
+    std::unique_ptr<LogicalOperator> view_get_sub_oper;
+    RC rc = table->view()->create_select_stmt(stmt);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("update view failed to create view get sub logical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+    rc = create_plan(stmt, view_get_sub_oper);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("update view failed to create view get sub logical operator. rc=%s", strrc(rc));
+      return rc;
+    }
+    table_get_oper->add_child(std::move(view_get_sub_oper));
+  } else {
+    table_get_oper.reset(new TableGetLogicalOperator(table, ReadWriteMode::READ_WRITE));
+  }
 
   unique_ptr<LogicalOperator> predicate_oper;
 

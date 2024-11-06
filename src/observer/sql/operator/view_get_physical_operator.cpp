@@ -1,4 +1,5 @@
 #include "sql/operator/view_get_physical_operator.h"
+#include "sql/expr/expression_tuple.h"
 
 RC ViewGetPhysicalOperator::open(Trx *trx) {
   RC rc = RC::SUCCESS;
@@ -47,6 +48,13 @@ Tuple *ViewGetPhysicalOperator::current_tuple() {
 
   tuple_.set_names(specs);
   tuple_.set_cells(cells);
+
+  auto *expr_tuple = dynamic_cast<ExpressionTuple<std::unique_ptr<Expression>> *>(tuple);
+  if (expr_tuple != nullptr && expr_tuple->is_record_set()) {
+    tuple_.set_record(expr_tuple->record());
+  } else if (expr_tuple != nullptr && expr_tuple->is_joined_map_set()) {
+    tuple_.set_joined_tuple_map(expr_tuple->joined_map());
+  }
 
   return &tuple_;
 }

@@ -19,6 +19,25 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     return rc;
   }
 
+  std::vector<std::string> real_field_names;
+  std::vector<FieldMeta> real_fields;
+  bool has_view = false;
+  if (table_->view()) {
+    has_view = true;
+    View *view = table_->view();
+    for (const FieldMeta &field : fields_) {
+      std::string real_field_name;
+      table_->view()->col_to_field_lookup(field.name(), real_field_name);
+      real_field_names.push_back(real_field_name);
+    }
+
+    table_ = view->handle_view_update(real_field_names, real_fields);
+    if (table_ == nullptr) {
+      LOG_WARN("failed to handle view update");
+      return RC::INTERNAL;
+    }
+  }
+
   while (OB_SUCC(rc = child->next())) {
     Tuple *tuple = child->current_tuple();
     if (nullptr == tuple) {
@@ -27,16 +46,26 @@ RC UpdatePhysicalOperator::open(Trx *trx)
     }
     sql_debug("update got a tuple: %s", tuple->to_string().c_str());
 
-    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-    Record   &record    = row_tuple->record();
-    records_.emplace_back(std::move(record));
+    if (has_view) {
+      ValueListTuple *val_list_tuple = static_cast<ValueListTuple *>(tuple);
+      if (val_list_tuple->is_record_set()) {
+        Record record = val_list_tuple->record();
+        records_.emplace_back(std::move(record));
+      } else if (val_list_tuple->is_joined_map_set()) {
+        Record record;
+        val_list_tuple->lookup_joined_map(table_->name(), record);
+        records_.emplace_back(record);
+      } else {
+        return RC::INVALID_ARGUMENT;
+      }
+    } else {
+      RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+      Record   &record    = row_tuple->record();
+      records_.emplace_back(std::move(record));
+    }
   }
 
   child->close();
-
-  if (!records_.empty() && update_internal_error_) {
-    return RC::INVALID_ARGUMENT;
-  }
 
   if (!records_.empty() && update_internal_error_) {
     return RC::INVALID_ARGUMENT;
@@ -83,8 +112,10 @@ RC UpdatePhysicalOperator::open(Trx *trx)
       char *updated_data = nullptr;
       updated_data       = new char[record.len()];
       memcpy(updated_data, record.data(), record.len());
+      int field_count = has_view ? real_fields.size() : fields_.size();
 
-    for (size_t i = 0; i < fields_.size(); i++) {
+    for (size_t i = 0; i < field_count; i++) {
+      const FieldMeta &field = has_view ? real_fields[i] : fields_[i];
       if (values_[i].get_null()) {
         if (fields_[i].type() == AttrType::CHARS) {
           *(uint8_t *)(updated_data + fields_[i].offset()) = NULL_CHAR_MAGIC_NUMBER;
@@ -94,7 +125,6 @@ RC UpdatePhysicalOperator::open(Trx *trx)
         continue;
       }
       
-      const FieldMeta &field = fields_[i];
       if (field.type() == AttrType::CHARS) {
         memset(updated_data + field.offset(), 0, field.len());
       }

@@ -271,6 +271,8 @@ public:
 
   const Record &record() const { return *record_; }
 
+  std::string table_name() const { return table_->name(); }
+
 private:
   Record                  *record_ = nullptr;
   const Table             *table_  = nullptr;
@@ -349,6 +351,9 @@ public:
 
   void set_names(const std::vector<TupleCellSpec> &specs) { specs_ = specs; }
   void set_cells(const std::vector<Value> &cells) { cells_ = cells; }
+  void set_record(const Record &record) { record_ = record; record_set_ = true; }
+  Record record() const { return record_; }
+  bool is_record_set() const { return record_set_; }
 
   virtual int cell_num() const override { return static_cast<int>(cells_.size()); }
 
@@ -408,9 +413,31 @@ public:
     return RC::SUCCESS;
   }
 
+  void set_joined_tuple_map(const std::map<std::string, Record> &joined_tuple_map)
+  {
+    joined_tuple_map_set_ = true;
+    joined_tuple_map_       = joined_tuple_map;
+  }
+
+  bool is_joined_map_set() const { return joined_tuple_map_set_; }
+  RC lookup_joined_map(const std::string &key, Record &record) const
+  {
+    auto it = joined_tuple_map_.find(key);
+    if (it == joined_tuple_map_.end()) {
+      return RC::NOTFOUND;
+    }
+
+    record = it->second;
+    return RC::SUCCESS;
+  }
+
 private:
   std::vector<Value>         cells_;
   std::vector<TupleCellSpec> specs_;
+  bool                       record_set_ = false;
+  Record                     record_;
+  bool                       joined_tuple_map_set_ = false;
+  std::map<std::string, Record> joined_tuple_map_;
 };
 
 /**
@@ -427,6 +454,9 @@ public:
 
   void set_left(Tuple *left) { left_ = left; }
   void set_right(Tuple *right) { right_ = right; }
+
+  const Tuple *get_left() const { return left_; }
+  const Tuple *get_right() const { return right_; }
 
   int cell_num() const override { return left_->cell_num() + right_->cell_num(); }
 

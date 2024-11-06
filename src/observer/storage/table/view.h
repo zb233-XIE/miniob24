@@ -8,11 +8,18 @@
 
 class SelectStmt;
 class Db;
+class Table;
+
+struct ViewMetaInfo {
+  int expr_type;
+  std::string field_name;
+  std::string table_name;
+};
 
 class View {
 public:
-  View(const std::string &name, const std::vector<std::string> &col_names, const std::string &sql_str, Db *db)
-      : name_(name), col_names_(col_names), sql_str_(sql_str), db_(db) {}
+  View(const std::string &name, const std::vector<std::string> &col_names, const std::string &sql_str, Db *db, const std::vector<ViewMetaInfo> &view_meta_infos)
+      : name_(name), col_names_(col_names), sql_str_(sql_str), db_(db), view_meta_infos_(view_meta_infos) {}
   ~View() = default;
   const std::string &name() const { return name_; }
   const std::vector<std::string> &col_names() const { return col_names_; }
@@ -63,11 +70,16 @@ public:
     return RC::SUCCESS;
   }
 
+  Table *handle_view_insert(std::vector<int> &indexes);
+  Table *handle_view_update(std::vector<std::string> field_names, std::vector<FieldMeta> &update_fields);
+  Table *handle_view_delete();
+
 private:
   std::string name_;
   std::vector<std::string> col_names_;
   std::string sql_str_;
   Db *db_;
+  std::vector<ViewMetaInfo> view_meta_infos_;
 
   std::vector<FieldMeta> fields_;
   bool is_lookup_map_set_ = false;

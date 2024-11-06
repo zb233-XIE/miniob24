@@ -37,6 +37,35 @@ RC InsertStmt::create(Db *db, const InsertSqlNode &inserts, Stmt *&stmt)
     return RC::SCHEMA_TABLE_NOT_EXIST;
   }
 
+  if (table->view()) {
+    View *view = table->view();
+    if (view->col_names().size() != inserts.values.size()) {
+      LOG_WARN("column number not match. expect %d, but got %d", view->col_names().size(), inserts.values.size());
+      return RC::INVALID_ARGUMENT;
+    }
+
+    std::vector<int> indexes;
+    Table *insert_table = view->handle_view_insert(indexes);
+    if (nullptr == insert_table) {
+      LOG_WARN("failed to get insert table");
+      return RC::INTERNAL;
+    }
+
+    Value *view_insert_values = new Value[indexes.size()];
+    for (size_t i = 0; i < indexes.size(); i++) {
+      if (indexes[i] != -1) {
+        view_insert_values[i] = inserts.values[indexes[i]];
+      } else {
+        Value null_value;
+        null_value.set_null();
+        view_insert_values[i] = null_value;
+      }
+    }
+
+    stmt = new InsertStmt(insert_table, view_insert_values, indexes.size());
+    return RC::SUCCESS;
+  }
+
   // check the fields number
   const Value     *values     = inserts.values.data();
   const int        value_num  = static_cast<int>(inserts.values.size());
