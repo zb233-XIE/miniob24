@@ -288,6 +288,10 @@ RC Db::sync()
   // 调用所有表的sync函数刷新数据到磁盘
   for (const auto &table_pair : opened_tables_) {
     Table *table = table_pair.second;
+    if (table->view() != nullptr) {
+      continue;
+    }
+
     rc           = table->sync();
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to flush table. table=%s.%s, rc=%d:%s", name_.c_str(), table->name(), rc, strrc(rc));
