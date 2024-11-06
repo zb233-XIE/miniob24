@@ -34,6 +34,7 @@ TableMeta::TableMeta(const TableMeta &other)
     : table_id_(other.table_id_),
       name_(other.name_),
       fields_(other.fields_),
+      output_fields_(other.output_fields_),
       indexes_(other.indexes_),
       storage_format_(other.storage_format_),
       record_size_(other.record_size_)
@@ -43,6 +44,7 @@ void TableMeta::swap(TableMeta &other) noexcept
 {
   name_.swap(other.name_);
   fields_.swap(other.fields_);
+  output_fields_.swap(other.output_fields_);
   indexes_.swap(other.indexes_);
   std::swap(record_size_, other.record_size_);
 }

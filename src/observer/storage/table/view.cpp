@@ -32,3 +32,27 @@ RC View::create_select_stmt(SelectStmt *&select_stmt) {
   select_stmt = static_cast<SelectStmt *>(stmt);
   return rc;
 }
+
+void View::init_fields(const std::vector<AttrInfoSqlNode> &attr_infos) {
+  int offset = 0;
+  for (size_t i = 0; i < attr_infos.size(); i++) {
+    const AttrInfoSqlNode &attr_info = attr_infos[i];
+    FieldMeta field(col_names_[i].c_str(), attr_info.type, offset, attr_info.length, true, i, attr_info.nullable);
+    fields_.push_back(field);
+    offset += attr_info.length;
+  }
+
+  
+}
+
+const FieldMeta *View::field(const char *name) const {
+  if (nullptr == name) {
+    return nullptr;
+  }
+  for (const FieldMeta &field : fields_) {
+    if (0 == strcmp(field.name(), name)) {
+      return &field;
+    }
+  }
+  return nullptr;
+}

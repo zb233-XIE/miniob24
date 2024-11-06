@@ -1,13 +1,14 @@
 #include "sql/stmt/create_view_stmt.h"
 #include "common/log/log.h"
 #include "sql/expr/tuple.h"
+#include "sql/operator/project_physical_operator.h"
 #include "sql/optimizer/logical_plan_generator.h"
 #include "sql/optimizer/optimize_stage.h"
 #include "sql/optimizer/physical_plan_generator.h"
 
 RC CreateViewStmt::create(Db *db, CreateViewSqlNode &create_view_sql, Stmt *&stmt)
 {
-  Stmt *select_stmt;
+  Stmt *select_stmt = nullptr;
   RC rc = Stmt::create_stmt(db, *create_view_sql.selection, select_stmt);
   if (rc != RC::SUCCESS) {
     LOG_WARN("create select stmt failed. rc=%s", strrc(rc));
@@ -51,10 +52,14 @@ RC CreateViewStmt::create(Db *db, CreateViewSqlNode &create_view_sql, Stmt *&stm
     }
   }
 
+  auto project_oper = dynamic_cast<ProjectPhysicalOperator *>(physical_oper.get());
+  auto attr_info = project_oper->attr_infos();
+
   CreateViewStmt *create_view_stmt = new CreateViewStmt(
     create_view_sql.view_name,
     create_view_sql.col_names,
-    create_view_sql.sql_str
+    create_view_sql.sql_str,
+    attr_info
   );
 
   stmt = create_view_stmt;

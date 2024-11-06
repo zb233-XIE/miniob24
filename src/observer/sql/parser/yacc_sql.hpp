@@ -120,24 +120,31 @@ extern int yydebug;
     UNIQUE = 321,                  /* UNIQUE  */
     LBRACKET = 322,                /* LBRACKET  */
     RBRACKET = 323,                /* RBRACKET  */
-    L2_DISTANCE = 324,             /* L2_DISTANCE  */
-    COSINE_DISTANCE = 325,         /* COSINE_DISTANCE  */
-    INNER_PRODUCT = 326,           /* INNER_PRODUCT  */
-    EXISTS_T = 327,                /* EXISTS_T  */
-    NOT = 328,                     /* NOT  */
-    IN_T = 329,                    /* IN_T  */
-    VIEW = 330,                    /* VIEW  */
-    NULL_T = 331,                  /* NULL_T  */
-    NOT_NULL_T = 332,              /* NOT_NULL_T  */
-    ORDER_BY = 333,                /* ORDER_BY  */
-    ASC = 334,                     /* ASC  */
-    AS = 335,                      /* AS  */
-    NUMBER = 336,                  /* NUMBER  */
-    FLOAT = 337,                   /* FLOAT  */
-    ID = 338,                      /* ID  */
-    SSS = 339,                     /* SSS  */
-    DATE = 340,                    /* DATE  */
-    UMINUS = 341                   /* UMINUS  */
+    WITH = 324,                    /* WITH  */
+    DISTANCE = 325,                /* DISTANCE  */
+    TYPE = 326,                    /* TYPE  */
+    LISTS = 327,                   /* LISTS  */
+    PROBES = 328,                  /* PROBES  */
+    IVFFLAT = 329,                 /* IVFFLAT  */
+    L2_DISTANCE = 330,             /* L2_DISTANCE  */
+    COSINE_DISTANCE = 331,         /* COSINE_DISTANCE  */
+    INNER_PRODUCT = 332,           /* INNER_PRODUCT  */
+    EXISTS_T = 333,                /* EXISTS_T  */
+    NOT = 334,                     /* NOT  */
+    IN_T = 335,                    /* IN_T  */
+    VIEW = 336,                    /* VIEW  */
+    NULL_T = 337,                  /* NULL_T  */
+    NOT_NULL_T = 338,              /* NOT_NULL_T  */
+    ORDER_BY = 339,                /* ORDER_BY  */
+    ASC = 340,                     /* ASC  */
+    AS = 341,                      /* AS  */
+    LIMIT = 342,                   /* LIMIT  */
+    NUMBER = 343,                  /* NUMBER  */
+    FLOAT = 344,                   /* FLOAT  */
+    ID = 345,                      /* ID  */
+    SSS = 346,                     /* SSS  */
+    DATE = 347,                    /* DATE  */
+    UMINUS = 348                   /* UMINUS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -146,7 +153,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 166 "yacc_sql.y"
+#line 174 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -177,8 +184,10 @@ union YYSTYPE
   char *                                     date;
   bool                                       nullable_spec;
   bool                                       asc_desc;
+  VecIndexFieldAnno                          vec_index_param;
+  std::vector<VecIndexFieldAnno> *           vec_index_param_list;
 
-#line 182 "yacc_sql.hpp"
+#line 191 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

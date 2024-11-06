@@ -36,6 +36,9 @@ public:
   void set_predicates(std::vector<std::unique_ptr<Expression>> &&exprs);
   auto predicates() -> std::vector<std::unique_ptr<Expression>> & { return predicates_; }
 
+  void set_limit(int limits) { limits_ = limits; }
+  int  limit() const { return limits_; }
+
 private:
   Table        *table_ = nullptr;
   ReadWriteMode mode_  = ReadWriteMode::READ_WRITE;
@@ -45,4 +48,5 @@ private:
   // 不包含复杂的表达式运算，比如加减乘除、或者conjunction expression
   // 如果有多个表达式，他们的关系都是 AND
   std::vector<std::unique_ptr<Expression>> predicates_;
+  int                                      limits_; // [ATT!] only for vector search index hit
 };
