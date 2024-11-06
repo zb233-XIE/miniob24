@@ -273,6 +273,7 @@ bool is_valid_date(const char *date) {
 %type <order_by_list>       order_by_list
 %type <order_by_list>       order_by
 %type <string>              id_maybe_keyword
+%type <id_list>             insert_name_lists
 
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
@@ -717,18 +718,31 @@ type:
     | DATE_T   { $$ = static_cast<int>(AttrType::DATES); }
     | TEXT_T   { $$ = static_cast<int>(AttrType::TEXTS); }
     ;
+
+insert_name_lists:
+  {
+    $$ = nullptr;
+  }
+  | LBRACE id_list RBRACE {
+    $$ = $2;
+  }
+
 insert_stmt:        /*insert   语句的语法解析树*/
-    INSERT INTO id_maybe_keyword VALUES LBRACE value value_list RBRACE 
+    INSERT INTO id_maybe_keyword insert_name_lists VALUES LBRACE value value_list RBRACE 
     {
       $$ = new ParsedSqlNode(SCF_INSERT);
       $$->insertion.relation_name = $3;
-      if ($7 != nullptr) {
-        $$->insertion.values.swap(*$7);
-        delete $7;
+      if ($4 != nullptr) {
+        $$->insertion.insertion_names.swap(*$4);
+        delete $4;
       }
-      $$->insertion.values.emplace_back(*$6);
+      if ($7 != nullptr) {
+        $$->insertion.values.swap(*$8);
+        delete $8;
+      }
+      $$->insertion.values.emplace_back(*$7);
       std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
-      delete $6;
+      delete $7;
       free($3);
     }
     ;
