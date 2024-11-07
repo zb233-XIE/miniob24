@@ -30,10 +30,15 @@ Table *BinderContext::find_table(const char *table_name) const
 {
   auto pred = [table_name](Table *table) { return 0 == strcasecmp(table_name, table->name()) || 0 == strcasecmp(table_name, table->alias()); };
   auto iter = ranges::find_if(query_tables_, pred);
-  if (iter == query_tables_.end()) {
-    return nullptr;
+  if (iter != query_tables_.end()) {
+    return *iter;
   }
-  return *iter;
+
+  if (alias_table_.find(std::string(table_name)) != alias_table_.end()) {
+    return alias_table_.at(std::string(table_name));
+  }
+
+  return nullptr;
 }
 
 Table *BinderContext::find_table_in_helper_tables(const char *table_name) const

@@ -736,7 +736,7 @@ insert_stmt:        /*insert   语句的语法解析树*/
         $$->insertion.insertion_names.swap(*$4);
         delete $4;
       }
-      if ($7 != nullptr) {
+      if ($8 != nullptr) {
         $$->insertion.values.swap(*$8);
         delete $8;
       }

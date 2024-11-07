@@ -2633,7 +2633,7 @@ yyreduce:
         (yyval.sql_node)->insertion.insertion_names.swap(*(yyvsp[-5].id_list));
         delete (yyvsp[-5].id_list);
       }
-      if ((yyvsp[-2].value) != nullptr) {
+      if ((yyvsp[-1].value_list) != nullptr) {
         (yyval.sql_node)->insertion.values.swap(*(yyvsp[-1].value_list));
         delete (yyvsp[-1].value_list);
       }

@@ -92,6 +92,7 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     table_map.insert({table_name, table});
     if (!select_sql.relations[i].alias.empty()) {
       table_map.insert({select_sql.relations[i].alias, table});
+      binder_context.add_alias(select_sql.relations[i].alias, table);
     }
   }
 

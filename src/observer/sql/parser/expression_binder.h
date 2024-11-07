@@ -28,6 +28,8 @@ public:
 
   void add_helper_table(Table *table) { helper_tables_.push_back(table); }
 
+  void add_alias(const std::string &alias, Table *table) { alias_table_[alias] = table; }
+
   Table *find_table(const char *table_name) const;
 
   Table *find_table_in_helper_tables(const char *table_name) const;
@@ -39,6 +41,7 @@ public:
 private:
   std::vector<Table *> query_tables_;
   std::vector<Table *> helper_tables_;
+  std::unordered_map<std::string, Table *> alias_table_;
 };
 
 /**
