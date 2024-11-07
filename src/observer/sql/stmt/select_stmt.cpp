@@ -69,6 +69,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   // collect tables in `from` statement
   vector<Table *>                tables;
   unordered_map<string, Table *> table_map;
+  std::vector<bool>              is_aliased(select_sql.relations.size());
+  std::vector<std::string>       aliases(select_sql.relations.size());
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
     const char *table_name = select_sql.relations[i].name.c_str();
     if (nullptr == table_name) {
@@ -86,13 +88,15 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       LOG_WARN("duplicate table alias. alias=%s", select_sql.relations[i].alias.c_str());
       return RC::TABLE_ALIAS_DUPLICATE;
     }
-    table->set_alias(select_sql.relations[i].alias);
     binder_context.add_table(table);
     tables.push_back(table);
     table_map.insert({table_name, table});
     if (!select_sql.relations[i].alias.empty()) {
+      table->set_alias(select_sql.relations[i].alias);
       table_map.insert({select_sql.relations[i].alias, table});
       binder_context.add_alias(select_sql.relations[i].alias, table);
+      is_aliased[i] = true;
+      aliases[i] = select_sql.relations[i].alias;
     }
   }
 
@@ -311,6 +315,8 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->subquery_stmt_ = subquery_stmt;
   select_stmt->order_by_ = order_by_stmt;
   select_stmt->limits_    = select_sql.limits;
+  select_stmt->is_aliased_.swap(is_aliased);
+  select_stmt->aliases_.swap(aliases);
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }

@@ -128,10 +128,15 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   const std::vector<Table *> &tables = select_stmt->tables();
   // FIXME: handle view cases of join tables
   bool has_view_flag = false;
-  for (Table *table : tables) {
+  for (size_t i = 0; i < tables.size(); i++) {
+    Table *table = tables[i];
     unique_ptr<LogicalOperator> table_get_oper;
     if (table->view() == nullptr) {
       table_get_oper = make_unique<TableGetLogicalOperator>(table, ReadWriteMode::READ_ONLY);
+      TableGetLogicalOperator *inner_oper = static_cast<TableGetLogicalOperator *>(table_get_oper.get());
+      if (select_stmt->is_aliased()[i]) {
+        inner_oper->set_alias(select_stmt->aliases()[i]);
+      }
     } else {
       has_view_flag = true;
       table_get_oper = make_unique<ViewGetLogicalOperator>(table->view(), ReadWriteMode::READ_ONLY);

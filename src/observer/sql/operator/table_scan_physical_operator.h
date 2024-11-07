@@ -48,6 +48,10 @@ public:
 
   void set_predicates(std::vector<std::unique_ptr<Expression>> &&exprs);
 
+  void set_alias(const std::string &alias) { alias_ = alias; is_aliased_ = true; }
+  bool is_aliased() const { return is_aliased_; }
+  const std::string &alias() const { return alias_; }
+
 private:
   RC filter(RowTuple &tuple, bool &result);
 
@@ -59,4 +63,6 @@ private:
   Record                                   current_record_;
   RowTuple                                 tuple_;
   std::vector<std::unique_ptr<Expression>> predicates_;  // TODO chang predicate to table tuple filter
+  bool is_aliased_ = false;
+  std::string alias_;
 };

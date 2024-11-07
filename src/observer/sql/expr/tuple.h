@@ -175,7 +175,7 @@ public:
 
   void set_record(Record *record) { this->record_ = record; }
 
-  void set_schema(const Table *table, const std::vector<FieldMeta> *fields)
+  void set_schema(const Table *table, const std::vector<FieldMeta> *fields, bool is_aliased = false, std::string alias = "")
   {
     table_ = table;
     // fix:join当中会多次调用右表的open,open当中会调用set_scheme，从而导致tuple当中会存储
@@ -186,7 +186,11 @@ public:
     this->speces_.clear();
     this->speces_.reserve(fields->size());
     for (const FieldMeta &field : *fields) {
-      speces_.push_back(new FieldExpr(table, &field));
+      FieldExpr *field_expr = new FieldExpr(table, &field);
+      if (is_aliased) {
+        field_expr->set_name(alias + "." + field.name());
+      }
+      speces_.push_back(field_expr);
     }
   }
 
@@ -234,6 +238,7 @@ public:
   {
     const Field &field = speces_[index]->field();
     spec               = TupleCellSpec(table_->name(), field.field_name());
+    spec.set_alias2(speces_[index]->name());
     return RC::SUCCESS;
   }
 

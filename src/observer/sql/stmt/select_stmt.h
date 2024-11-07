@@ -49,6 +49,8 @@ public:
   std::vector<FilterStmt *>   join_filter_stmts() const { return join_filter_stmts_; }
   FilterStmt                 *having_filter_stmt() const { return having_filter_stmt_; }
   SubqueryStmt               *subquery_stmt() const { return subquery_stmt_; }
+  const std::vector<bool> &is_aliased() const { return is_aliased_; }
+  const std::vector<std::string> &aliases() const { return aliases_; }
 
   std::vector<std::unique_ptr<Expression>> &query_expressions() { return query_expressions_; }
   std::vector<std::unique_ptr<Expression>> &group_by() { return group_by_; }
@@ -61,6 +63,8 @@ public:
 private:
   std::vector<std::unique_ptr<Expression>> query_expressions_;
   std::vector<Table *>                     tables_;
+  std::vector<bool>                        is_aliased_;
+  std::vector<std::string>                 aliases_;
   FilterStmt                              *filter_stmt_ = nullptr;
   std::vector<std::unique_ptr<Expression>> group_by_;
   std::vector<FilterStmt *>                join_filter_stmts_;
