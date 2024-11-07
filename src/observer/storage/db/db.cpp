@@ -318,7 +318,7 @@ RC Db::recover()
   }
 
   IntegratedLogReplayer log_replayer(*buffer_pool_manager_, unique_ptr<LogReplayer>(trx_log_replayer));
-  RC                    rc = log_handler_->replay(log_replayer, check_point_lsn_ /*start_lsn*/);
+  RC                    rc = log_handler_->replay(log_replayer, check_point_lsn_ /*start_lsn*/); // 从检查点开始replay，检查点在Db::sync的时候会更新
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to replay log. rc=%s", strrc(rc));
     return rc;

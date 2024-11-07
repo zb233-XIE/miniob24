@@ -13,10 +13,13 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "storage/trx/mvcc_trx.h"
+#include "common/log/log.h"
+#include "common/rc.h"
 #include "storage/db/db.h"
 #include "storage/field/field.h"
 #include "storage/trx/mvcc_trx_log.h"
 #include "common/lang/algorithm.h"
+#include <cstring>
 
 MvccTrxKit::~MvccTrxKit()
 {
@@ -186,8 +189,31 @@ RC MvccTrx::delete_record(Table *table, Record &record)
   return RC::SUCCESS;
 }
 
-RC MvccTrx::update_record(Table *table, Record &record, char *update_data) {
-  return RC::UNIMPLEMENTED;
+// 更新record
+// 由于可能会rollback，所以不能直接在原有的record基础上修改，否则无法rollback
+// 
+RC MvccTrx::update_record(Table *table, Record &record, char *update_data)
+{
+  int len = record.len();
+  // "删除"原来的record
+  Record record_to_delete;
+  record_to_delete.set_rid(record.rid());
+  RC rc = delete_record(table, record_to_delete);
+  if (OB_FAIL(rc)) {
+    LOG_WARN("failed to delete record. rid=%s, rc=%s", record.rid().to_string().c_str(), strrc(rc));
+    return rc;
+  }
+  // 插入新的record
+  Record new_record;
+  char *data = (char *)malloc(sizeof(char) * len);
+  memcpy(data, update_data, len);
+  new_record.set_data_owner(data, len);
+  rc = insert_record(table, new_record);
+  if (OB_FAIL(rc)) {
+    operations_.pop_back();
+    return rc;
+  }
+  return RC::SUCCESS;
 }
 
 RC MvccTrx::visit_record(Table *table, Record &record, ReadWriteMode mode)
@@ -333,6 +359,28 @@ RC MvccTrx::commit_with_trx_id(int32_t commit_xid)
                rid.to_string().c_str(), strrc(rc));
       } break;
 
+      // case Operation::Type::UPDATE: {
+      //   RID    rid(operation.page_num(), operation.slot_num());
+      //   Table *table = operation.table();
+      //   Field  begin_xid_field, end_xid_field;
+      //   trx_fields(table, begin_xid_field, end_xid_field);
+
+      //   auto record_updater = [this, &begin_xid_field, commit_xid](Record &record) -> bool {
+      //     LOG_DEBUG("before commit update record. trx id=%d, begin xid=%d, commit xid=%d, lbt=%s",
+      //               trx_id_, begin_xid_field.get_int(record), commit_xid, lbt());
+      //     ASSERT(begin_xid_field.get_int(record) == -this->trx_id_ && (!recovering_), 
+      //            "got an invalid record while committing. begin xid=%d, this trx id=%d", 
+      //            begin_xid_field.get_int(record), trx_id_);
+
+      //     begin_xid_field.set_int(record, commit_xid);
+      //     return true;
+      //   };
+
+      //   rc = operation.table()->visit_record(rid, record_updater);
+      //   ASSERT(rc == RC::SUCCESS, "failed to get record while committing. rid=%s, rc=%s",
+      //          rid.to_string().c_str(), strrc(rc));
+      // } break;
+
       default: {
         ASSERT(false, "unsupported operation. type=%d", static_cast<int>(operation.type()));
       }
@@ -349,6 +397,10 @@ RC MvccTrx::commit_with_trx_id(int32_t commit_xid)
   return rc;
 }
 
+// 回滚，所执行的操作的逆过程，类似于undo
+// 插入->删除
+// 删除->将end_xid_field改为正无穷
+// 更新->
 RC MvccTrx::rollback()
 {
   RC rc    = RC::SUCCESS;
@@ -412,6 +464,10 @@ RC MvccTrx::rollback()
                rid.to_string().c_str(), strrc(rc));
       } break;
 
+      // case Operation::Type::UPDATE: {
+        
+      // } break;
+
       default: {
         ASSERT(false, "unsupported operation. type=%d", static_cast<int>(operation.type()));
       }
@@ -466,6 +522,11 @@ RC MvccTrx::redo(Db *db, const LogEntry &log_entry)
       auto *trx_log_record = reinterpret_cast<const MvccTrxRecordLogEntry *>(log_entry.data());
       operations_.push_back(Operation(Operation::Type::DELETE, table, trx_log_record->rid));
     } break;
+
+    // case MvccTrxLogOperation::Type::UPDATE_RECORD: {
+    //   auto *trx_log_record = reinterpret_cast<const MvccTrxRecordLogEntry *>(log_entry.data());
+    //   operations_.push_back(Operation(Operation::Type::UPDATE, table, trx_log_record->rid));
+    // } break;
 
     case MvccTrxLogOperation::Type::COMMIT: {
       // auto *trx_log_record = reinterpret_cast<const MvccTrxCommitLogEntry *>(log_entry.data());
