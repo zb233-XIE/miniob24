@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "storage/index/bplus_tree.h"
 #include "storage/index/index.h"
+#include <cstdint>
 
 /**
  * @brief B+树索引
@@ -32,6 +33,7 @@ public:
   RC close();
 
   RC insert_entry(const char *record, const RID *rid) override;
+  RC insert_entry_mvcc(const char *record, const RID *rid, Trx *trx) override;
   RC delete_entry(const char *record, const RID *rid) override;
 
   /**

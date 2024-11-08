@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 // Created by Meiyi & Wangyunlai on 2021/5/13.
 //
 
+#include <cstdint>
 #include <limits.h>
 #include <string.h>
 
@@ -198,6 +199,32 @@ RC Table::insert_record(Record &record)
   }
 
   rc = insert_entry_of_indexes(record.data(), record.rid());
+  if (rc != RC::SUCCESS) {  // 可能出现了键值重复
+    RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false /*error_on_not_exists*/);
+    if (rc2 != RC::SUCCESS && rc2 != RC::RECORD_NOT_EXIST) {
+      LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
+                name(), rc2, strrc(rc2));
+    }
+    rc2 = record_handler_->delete_record(&record.rid());
+    if (rc2 != RC::SUCCESS) {
+      LOG_PANIC("Failed to rollback record data when insert index entries failed. table name=%s, rc=%d:%s",
+                name(), rc2, strrc(rc2));
+    }
+  }
+  return rc;
+}
+
+RC Table::insert_record_mvcc(Record &record, Trx *trx)
+{
+  RC rc = RC::SUCCESS;
+  rc    = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
+  if (rc != RC::SUCCESS) {
+    LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
+    return rc;
+  }
+
+  // rc = insert_entry_of_indexes(record.data(), record.rid());
+  rc = insert_entry_of_indexes_mvcc(record.data(), record.rid(), trx);
   if (rc != RC::SUCCESS) {  // 可能出现了键值重复
     RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false /*error_on_not_exists*/);
     if (rc2 != RC::SUCCESS && rc2 != RC::RECORD_NOT_EXIST) {
@@ -538,6 +565,33 @@ RC Table::insert_entry_of_indexes(const char *record, const RID &rid)
   for (size_t i = 0; i < indexes_.size(); i++) {
     Index *index = indexes_[i];
     rc = index->insert_entry(record, &rid);
+    if (rc != RC::SUCCESS) {
+      fail_index = i;
+      break;
+    }
+  }
+
+  RC rc2;
+  for (int i = fail_index - 1; i >= 0; i--) {
+    Index *index = indexes_[i];
+    rc2 = index->delete_entry(record, &rid);
+    if (rc2 != RC::SUCCESS) {
+      LOG_ERROR("Failed to rollback index data when insert index entries failed. table name=%s, rc=%d:%s",
+                name(), rc, strrc(rc));
+    }
+  }
+
+  return rc;
+}
+
+RC Table::insert_entry_of_indexes_mvcc(const char *record, const RID &rid, Trx *trx)
+{
+  RC rc = RC::SUCCESS;
+  int fail_index = -1;
+
+  for (size_t i = 0; i < indexes_.size(); i++) {
+    Index *index = indexes_[i];
+    rc = index->insert_entry_mvcc(record, &rid, trx);
     if (rc != RC::SUCCESS) {
       fail_index = i;
       break;
