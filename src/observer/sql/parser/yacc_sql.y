@@ -1012,7 +1012,7 @@ order_by_item:
 limit:
   /* empty */
   {
-    $$ = -1; // set to invalid number
+    $$ = INT_MAX; // set to invalid number
   }
   | LIMIT NUMBER
   {

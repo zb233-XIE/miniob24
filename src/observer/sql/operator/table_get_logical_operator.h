@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include "sql/operator/logical_operator.h"
+#include "sql/parser/parse_defs.h"
 #include "storage/field/field.h"
 #include "common/types.h"
 
@@ -42,6 +43,18 @@ public:
   void set_limit(int limits) { limits_ = limits; }
   int  limit() const { return limits_; }
 
+  bool vector_index_hit() const { return vector_index_hit_; }
+
+  void   set_feature_vector(Value &&feature_vector) { feature_vector_ = feature_vector; };
+  Value &feature_vector() { return feature_vector_; };
+
+  void set_index(Index *index)
+  {
+    vector_index_hit_ = true;
+    index_             = index;
+  }
+  Index *index() const { return index_; }
+
 private:
   Table        *table_ = nullptr;
   ReadWriteMode mode_  = ReadWriteMode::READ_WRITE;
@@ -53,5 +66,10 @@ private:
   // 不包含复杂的表达式运算，比如加减乘除、或者conjunction expression
   // 如果有多个表达式，他们的关系都是 AND
   std::vector<std::unique_ptr<Expression>> predicates_;
-  int                                      limits_; // [ATT!] only for vector search index hit
+
+  bool vector_index_hit_ = false;
+  // variables below are for vector_index_hit = true
+  Value  feature_vector_;
+  Index *index_  = nullptr;
+  int    limits_ = -1;
 };

@@ -18,11 +18,9 @@ See the Mulan PSL v2 for more details. */
 #include "storage/trx/trx.h"
 
 VectorIndexScanPhysicalOperator::VectorIndexScanPhysicalOperator(
-    Table *table, Index *index, ReadWriteMode mode, Value *feature_vector, DISTANCE_ALGO distance_algorithm, int limits)
-    : table_(table), index_(index), mode_(mode),limits_(limits), distance_algorithm_(distance_algorithm)
-{
-  feature_vector_ = *feature_vector;
-}
+    Table *table, Index *index, ReadWriteMode mode, Value &&feature_vector, int limits)
+    : table_(table), index_(index), mode_(mode), feature_vector_(feature_vector), limits_(limits)
+{}
 
 RC VectorIndexScanPhysicalOperator::open(Trx *trx)
 {

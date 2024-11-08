@@ -22,6 +22,9 @@ See the Mulan PSL v2 for more details. */
 #include <vector>
 
 #include "common/rc.h"
+#include "common/type/attr_type.h"
+#include "common/type/data_type.h"
+#include "common/value.h"
 #include "sql/expr/expression.h"
 #include "sql/operator/calc_logical_operator.h"
 #include "sql/operator/delete_logical_operator.h"
@@ -120,9 +123,12 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   unique_ptr<LogicalOperator> table_oper(nullptr);
   last_oper = &table_oper;
 
-  bool vector_order_by           = false;
-  int  vector_order_by_limit     = -1;
-  bool vector_order_by_index_hit = false;
+  bool          vector_order_by           = false;
+  bool          vector_order_by_index_hit = false;
+  int           vector_order_by_limit     = -1;
+  DISTANCE_ALGO query_algorithm           = DISTANCE_ALGO::NONE;
+  string        vector_query_field_name;
+  Value         feature_vector;
   // 在JonLogicalOperator和TableGetLogicalOperator之间插入PredicateLogicalOperator
   size_t                      idx    = 0;
   const std::vector<Table *> &tables = select_stmt->tables();
@@ -138,11 +144,11 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
         inner_oper->set_alias(select_stmt->aliases()[i]);
       }
     } else {
-      has_view_flag = true;
+      has_view_flag  = true;
       table_get_oper = make_unique<ViewGetLogicalOperator>(table->view(), ReadWriteMode::READ_ONLY);
       std::unique_ptr<LogicalOperator> view_get_sub_oper;
-      SelectStmt *stmt = nullptr;
-      RC rc = table->view()->create_select_stmt(stmt);
+      SelectStmt                      *stmt = nullptr;
+      RC                               rc   = table->view()->create_select_stmt(stmt);
       if (rc != RC::SUCCESS) {
         LOG_WARN("failed to create view get sub logical operator. rc=%s", strrc(rc));
         return rc;
@@ -174,21 +180,45 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
 
           // extract field name
           UnboundFieldExpr *ub_field_expr = nullptr;
+          ValueExpr        *value_expr    = nullptr;
           if (left_expr->type() == ExprType::UNBOUND_FIELD) {
             ASSERT(right_expr->type() == ExprType::VALUE, "vector search order by clause semantic error");
             ub_field_expr = static_cast<UnboundFieldExpr *>(left_expr.get());
+            value_expr    = static_cast<ValueExpr *>(right_expr.get());
           } else if (right_expr->type() == ExprType::UNBOUND_FIELD) {
             ASSERT(left_expr->type() == ExprType::VALUE, "vector search order by clause semantic error");
             ub_field_expr = static_cast<UnboundFieldExpr *>(right_expr.get());
+            value_expr    = static_cast<ValueExpr *>(left_expr.get());
+          }
+          // extract feature vector
+          if (value_expr->get_value().attr_type() != AttrType::VECTORS) {
+            Value::cast_to(value_expr->get_value(), AttrType::VECTORS, feature_vector);
+          } else {
+            feature_vector = value_expr->get_value();
           }
 
           if (ub_field_expr != nullptr) {
             // find index, check index algorithm
-            Index *index = table_get_oper_ptr->table()->find_index_by_field(ub_field_expr->field_name());
+            switch (vector_arith_expr->arithmetic_type()) {
+              case ArithmeticExpr::Type::L2_DIS: {
+                query_algorithm = DISTANCE_ALGO::L2_DISTANCE;
+              } break;
+              case ArithmeticExpr::Type::COS_DIS: {
+                query_algorithm = DISTANCE_ALGO::COSINE_DISTANCE;
+              } break;
+              case ArithmeticExpr::Type::INN_PDT: {
+                query_algorithm = DISTANCE_ALGO::INNER_PRODUCT;
+              } break;
+              default: {
+                LOG_WARN("vector order by clause contain unsupported algorithm");
+                break;
+              }
+            }  // extrace query field name
+            vector_query_field_name = ub_field_expr->field_name();
+            Index *index            = table_get_oper_ptr->table()->find_index_by_field(vector_query_field_name.c_str());
             if (index != nullptr) {
               auto index_algorithm = index->index_meta().alrgorithm();
-              auto query_algorithm = vector_arith_expr->arithmetic_type();
-              switch (query_algorithm) {
+              switch (vector_arith_expr->arithmetic_type()) {
                 case ArithmeticExpr::Type::L2_DIS: {
                   if (index_algorithm == DISTANCE_ALGO::L2_DISTANCE) {
                     vector_order_by_index_hit = true;
@@ -208,20 +238,12 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
                   vector_order_by_index_hit = false;
                 }
               }
-
               if (vector_order_by_index_hit) {
-                unique_ptr<Expression>                   exp(vector_arith_expr);
-                std::vector<std::unique_ptr<Expression>> predicate_vector;
-                predicate_vector.push_back(std::move(exp));
-                table_get_oper_ptr->set_predicates(std::move(predicate_vector));
+                table_get_oper_ptr->set_limit(select_stmt->limits());
+                table_get_oper_ptr->set_feature_vector(std::move(feature_vector));
+                table_get_oper_ptr->set_index(index);
               }
             }
-          }
-
-          if (vector_order_by_index_hit) {
-            table_get_oper_ptr->set_limit(select_stmt->limits());
-          } else {
-            table_get_oper_ptr->set_limit(-1);
           }
         }
       }
@@ -262,10 +284,10 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
   unique_ptr<LogicalOperator> group_by_oper;
 
   if (vector_order_by) {
-    // index not hit: project -> limit -> order_by
-    // index hit: project -> vector_index_scan
+    // index not hit: project -> limit -> order_by -> table_get
+    // index hit: project -> table_get
     if (!vector_order_by_index_hit) {
-      rc = create_plan(select_stmt->order_by(), order_by_oper);
+      rc = create_vector_order_by_plan(query_algorithm, std::move(feature_vector), vector_query_field_name, order_by_oper);
       if (OB_FAIL(rc)) {
         LOG_WARN("failed to create order by logical plan. rc=%s", strrc(rc));
         return rc;
@@ -353,10 +375,10 @@ RC LogicalPlanGenerator::create_plan(SelectStmt *select_stmt, unique_ptr<Logical
       project_oper_ptr->set_multi_tables_flag();
     }
 
-  if (has_view_flag) {
-    auto *project_oper_ptr = dynamic_cast<ProjectLogicalOperator *>(project_oper.get());
-    project_oper_ptr->set_has_view_flag();
-  }
+    if (has_view_flag) {
+      auto *project_oper_ptr = dynamic_cast<ProjectLogicalOperator *>(project_oper.get());
+      project_oper_ptr->set_has_view_flag();
+    }
     last_oper = &project_oper;
 
     rc = create_plan(select_stmt->order_by(), order_by_oper);
@@ -724,5 +746,23 @@ RC LogicalPlanGenerator::create_group_by_plan(
     group_by_oper->set_having_check(having_expr);
   }
   logical_operator = std::move(group_by_oper);
+  return RC::SUCCESS;
+}
+
+RC LogicalPlanGenerator::create_vector_order_by_plan(
+    DISTANCE_ALGO distance_algorithm, Value &&feature_vector, string query_field_name, std::unique_ptr<LogicalOperator> &logical_operator)
+{
+  if (distance_algorithm == DISTANCE_ALGO::NONE) {
+    LOG_ERROR("vector order by clause extract distance algorithm wrong");
+    logical_operator = nullptr;
+    return RC::INVALID_ARGUMENT;
+  }
+  if (feature_vector.attr_type() != AttrType::VECTORS) {
+    LOG_ERROR("vector order by clause extract feature vector wrong");
+    logical_operator = nullptr;
+    return RC::INVALID_ARGUMENT;
+  }
+  logical_operator = make_unique<OrderByLogicalOperator>(std::move(feature_vector), distance_algorithm, query_field_name);
+
   return RC::SUCCESS;
 }
