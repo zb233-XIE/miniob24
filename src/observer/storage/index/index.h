@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <cstdint>
 #include <stddef.h>
 #include <vector>
 
@@ -60,6 +61,7 @@ public:
    * @param[out] rid    插入的记录的位置
    */
   virtual RC insert_entry(const char *record, const RID *rid) = 0;
+  virtual RC insert_entry_mvcc(const char *record, const RID *rid, Trx *trx) = 0;
 
   /**
    * @brief 删除一条数据

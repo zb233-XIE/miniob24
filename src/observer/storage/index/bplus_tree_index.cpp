@@ -17,6 +17,9 @@ See the Mulan PSL v2 for more details. */
 #include "event/sql_debug.h"
 #include "storage/table/table.h"
 #include "storage/db/db.h"
+#include "storage/trx/mvcc_trx_log.h"
+#include "storage/trx/trx.h"
+#include <cstdint>
 
 BplusTreeIndex::~BplusTreeIndex() noexcept { close(); }
 
@@ -107,6 +110,42 @@ RC BplusTreeIndex::insert_entry(const char *record, const RID *rid)
 
   RC rc = index_handler_.insert_entry(key, rid);
   delete [] key;
+  return rc;
+}
+
+RC BplusTreeIndex::insert_entry_mvcc(const char *record, const RID *rid, Trx *trx)
+{
+  sql_debug("table_name:%s;index_name:%s; fields: %s\n",
+      table_->name(),
+      index_meta_.name(),
+      FieldMeta::attrs_to_str(index_meta_.fields()).c_str());
+  bool        has_null = false;
+  const char *key      = make_key(record, has_null);
+  int         key_len  = index_handler_.file_header().total_attr_length;
+
+  if (index_meta_.unique()) {
+    std::list<RID> rids;
+    index_handler_.get_entry(key, key_len, rids);
+    if (rids.size() > 0 && !has_null) {
+      int visible_num = rids.size();
+      for (RID &rid : rids) {
+        Record r;
+        table_->get_record(rid, r);
+        RC rc = trx->visit_record(table_, r, ReadWriteMode::READ_ONLY);
+        if (rc != RC::SUCCESS) {
+          visible_num--;
+        }
+      }
+      if (visible_num > 0 && !has_null) {
+        LOG_WARN("Failed to insert entry due to the key is already existed. key:%s", key);
+        delete[] key;
+        return RC::RECORD_DUPLICATE_KEY;
+      }
+    }
+  }
+
+  RC rc = index_handler_.insert_entry(key, rid);
+  delete[] key;
   return rc;
 }
 

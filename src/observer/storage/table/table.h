@@ -21,6 +21,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/types.h"
 #include "common/lang/span.h"
 #include "common/lang/functional.h"
+#include <cstdint>
 
 #define NULL_CHAR_MAGIC_NUMBER 0x8D
 #define NULL_INT_MAGIC_NUMER 1145141919
@@ -84,6 +85,7 @@ public:
    * @param record[in/out] 传入的数据包含具体的数据，插入成功会通过此字段返回RID
    */
   RC insert_record(Record &record);
+  RC insert_record_mvcc(Record &record, Trx *trx);
   RC insert_record(Record &record, const Field_LOB_ANNO *record_lob_anno);
   RC delete_record(const Record &record);
   RC delete_record(const RID &rid);
@@ -132,6 +134,7 @@ public:
 
 private:
   RC insert_entry_of_indexes(const char *record, const RID &rid);
+  RC insert_entry_of_indexes_mvcc(const char *record, const RID &rid, Trx *trx);
   RC delete_entry_of_indexes(const char *record, const RID &rid, bool error_on_not_exists);
   RC set_value_to_record(char *record_data, const Value &value, const FieldMeta *field);
 

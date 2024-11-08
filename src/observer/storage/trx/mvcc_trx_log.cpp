@@ -29,6 +29,7 @@ string MvccTrxLogOperation::to_string() const
   switch (type_) {
     case Type::INSERT_RECORD: return ret + "INSERT_RECORD";
     case Type::DELETE_RECORD: return ret + "DELETE_RECORD";
+    case Type::UPDATE_RECORD: return ret + "UPDATE_RECORD";
     case Type::COMMIT: return ret + "COMMIT";
     case Type::ROLLBACK: return ret + "ROLLBACK";
     default: return ret + "UNKNOWN";
@@ -98,6 +99,21 @@ RC MvccTrxLogHandler::delete_record(int32_t trx_id, Table *table, const RID &rid
       lsn, LogModule::Id::TRANSACTION, span<const char>(reinterpret_cast<const char *>(&log_entry), sizeof(log_entry)));
 }
 
+RC MvccTrxLogHandler::update_record(int32_t trx_id, Table *table, const RID &rid)
+{
+  ASSERT(trx_id > 0, "invalid trx_id:%d", trx_id);
+
+  MvccTrxRecordLogEntry log_entry;
+  log_entry.header.operation_type = MvccTrxLogOperation(MvccTrxLogOperation::Type::UPDATE_RECORD).index();
+  log_entry.header.trx_id         = trx_id;
+  log_entry.table_id              = table->table_id();
+  log_entry.rid                   = rid;
+
+  LSN lsn = 0;
+  return log_handler_.append(
+      lsn, LogModule::Id::TRANSACTION, span<const char>(reinterpret_cast<const char *>(&log_entry), sizeof(log_entry)));
+}
+
 RC MvccTrxLogHandler::commit(int32_t trx_id, int32_t commit_trx_id)
 {
   ASSERT(trx_id > 0 && commit_trx_id > trx_id, "invalid trx_id:%d, commit_trx_id:%d", trx_id, commit_trx_id);
@@ -137,6 +153,8 @@ MvccTrxLogReplayer::MvccTrxLogReplayer(Db &db, MvccTrxKit &trx_kit, LogHandler &
   : db_(db), trx_kit_(trx_kit), log_handler_(log_handler)
 {}
 
+// 这里的replay(回放)是指将log entry还原为trx，还没有对它里面的操作回滚
+// 如果某个trx已经commit或rollback，说明操作已经完成，不需要对这个trx的操作回滚
 RC MvccTrxLogReplayer::replay(const LogEntry &entry)
 {
   RC rc = RC::SUCCESS;
