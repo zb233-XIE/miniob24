@@ -24,9 +24,20 @@ public:
   BinderContext()          = default;
   virtual ~BinderContext() = default;
 
-  void add_table(Table *table) { query_tables_.push_back(table); }
+  void add_table(Table *table) { query_tables_.push_back(table); is_aliased_.push_back(false); }
 
   void add_helper_table(Table *table) { helper_tables_.push_back(table); }
+
+  void add_alias(const std::string &alias, Table *table) {
+    alias_table_[alias] = table;
+    alias_.push_back(alias);
+    is_aliased_.back() = true;
+  }
+
+  std::vector<bool> is_aliased() {return is_aliased_;}
+  bool has_alias() {return !alias_table_.empty();}
+
+  std::vector<std::string> get_alias() { return alias_; }
 
   Table *find_table(const char *table_name) const;
 
@@ -39,6 +50,9 @@ public:
 private:
   std::vector<Table *> query_tables_;
   std::vector<Table *> helper_tables_;
+  std::unordered_map<std::string, Table *> alias_table_;
+  std::vector<std::string> alias_;
+  std::vector<bool> is_aliased_;
 };
 
 /**

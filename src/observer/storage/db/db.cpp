@@ -164,8 +164,9 @@ RC Db::create_table(const char *table_name, span<const AttrInfoSqlNode> attribut
   return RC::SUCCESS;
 }
 
-RC Db::create_view(const char *view_name, const vector<string> &col_names, std::string select_sql_str, const std::vector<AttrInfoSqlNode> &attr_infos) {
-  View *view = new View(view_name, col_names, select_sql_str, this);
+RC Db::create_view(const char *view_name, const vector<string> &col_names, std::string select_sql_str, const std::vector<AttrInfoSqlNode> &attr_infos,
+                    const std::vector<ViewMetaInfo> &view_meta_infos) {
+  View *view = new View(view_name, col_names, select_sql_str, this, view_meta_infos);
   Table *table = new Table(view);
   view->init_fields(attr_infos);
   for (size_t i = 0; i < col_names.size(); i++) {
@@ -287,6 +288,10 @@ RC Db::sync()
   // 调用所有表的sync函数刷新数据到磁盘
   for (const auto &table_pair : opened_tables_) {
     Table *table = table_pair.second;
+    if (table->view() != nullptr) {
+      continue;
+    }
+
     rc           = table->sync();
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to flush table. table=%s.%s, rc=%d:%s", name_.c_str(), table->name(), rc, strrc(rc));

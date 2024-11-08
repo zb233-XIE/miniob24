@@ -40,7 +40,11 @@ RC FieldExpr::get_value(const Tuple &tuple, Value &value) const
 
     return tuple.find_cell(TupleCellSpec(str_looked_up), value);
   }
-  return tuple.find_cell(TupleCellSpec(table_name(), field_name()), value);
+  TupleCellSpec spec(table_name(), field_name());
+  if (strcmp(name(), field_name()) != 0 && strcmp(name(), spec.alias()) != 0) {
+    spec.set_alias2(name());
+  }
+  return tuple.find_cell(spec , value);
 }
 
 bool FieldExpr::equal(const Expression &other) const

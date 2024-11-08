@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/operator/physical_operator.h"
 #include "sql/expr/expression_tuple.h"
+#include "storage/table/view.h"
 
 /**
  * @brief 选择/投影物理算子
@@ -63,6 +64,22 @@ public:
       attr_infos.push_back(attr_info);
     }
     return attr_infos;
+  }
+
+  std::vector<ViewMetaInfo> get_view_meta_infos() {
+    std::vector<ViewMetaInfo> view_meta_infos;
+    for (size_t i = 0; i < expressions_.size(); i++) {
+      ViewMetaInfo info;
+      info.expr_type = (int)expressions_[i]->type();
+      if (expressions_[i]->type() == ExprType::FIELD) {
+        FieldExpr *field_expr = static_cast<FieldExpr *>(expressions_[i].get());
+        info.table_name = field_expr->table_name();
+        info.field_name = field_expr->field_name();
+      }
+      view_meta_infos.push_back(info);
+    }
+
+    return view_meta_infos;
   }
 
 private:

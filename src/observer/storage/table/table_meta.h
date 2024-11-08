@@ -84,7 +84,7 @@ protected:
   std::vector<FieldMeta> output_fields_; // 解决含大对象字段导致的存入与读出格式不一致
   std::vector<IndexMeta> indexes_;
   StorageFormat          storage_format_;
-  bool                   contain_lob_;   // 是否包含大对象
+  bool                   contain_lob_ = false;   // 是否包含大对象
 
   int record_size_ = 0;
   int output_record_size_ = 0;

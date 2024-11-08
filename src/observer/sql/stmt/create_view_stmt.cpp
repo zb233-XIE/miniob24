@@ -54,12 +54,14 @@ RC CreateViewStmt::create(Db *db, CreateViewSqlNode &create_view_sql, Stmt *&stm
 
   auto project_oper = dynamic_cast<ProjectPhysicalOperator *>(physical_oper.get());
   auto attr_info = project_oper->attr_infos();
+  auto view_meta_infos = project_oper->get_view_meta_infos();
 
   CreateViewStmt *create_view_stmt = new CreateViewStmt(
     create_view_sql.view_name,
     create_view_sql.col_names,
     create_view_sql.sql_str,
-    attr_info
+    attr_info,
+    view_meta_infos
   );
 
   stmt = create_view_stmt;

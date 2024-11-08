@@ -181,6 +181,8 @@ public:
 
   const char *table_name() const { return table_name_.c_str(); }
   const char *field_name() const { return field_name_.c_str(); }
+  void reset_table_name(std::string table_name) { table_name_ = table_name; }
+  void reset_field_name(std::string field_name) { field_name_ = field_name; }
 
 private:
   std::string table_name_;

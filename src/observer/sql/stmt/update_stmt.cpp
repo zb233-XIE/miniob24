@@ -159,7 +159,13 @@ RC UpdateStmt::create(Db *db, UpdateSqlNode &update, Stmt *&stmt)
   }
 
   // check whether the field exists
-  const std::vector<FieldMeta> &field_metas = *table->table_meta().output_field_metas();
+  std::vector<FieldMeta> field_metas;
+  if (table->view() != nullptr) {
+    field_metas = table->view()->fields();
+  } else {
+    field_metas = *table->table_meta().output_field_metas();
+  }
+  // const std::vector<FieldMeta> &field_metas = *table->table_meta().output_field_metas();
   // const FieldMeta              *update_field     = nullptr;
   std::vector<FieldMeta> update_fields;
 
