@@ -51,10 +51,13 @@ private:
   RC create_plan(UpdateStmt *update_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
   RC create_plan(OrderByStmt *order_stmt, std::unique_ptr<LogicalOperator> &logical_operator);
 
-  /* only be called when: vector serach no index hit */
+  /* only called when: vector serach no index hit */
   RC create_limit_plan(int limits, std::unique_ptr<LogicalOperator> &logical_operator);
+  RC create_vector_order_by_plan(
+      DISTANCE_ALGO distance_algorithm, Value &&feature_vector, string query_field_name, std::unique_ptr<LogicalOperator> &logical_operator);
 
-  RC create_group_by_plan(SelectStmt *select_stmt, std::unique_ptr<LogicalOperator> &logical_operator, std::unique_ptr<Expression> &having_expr);
+  RC create_group_by_plan(SelectStmt *select_stmt, std::unique_ptr<LogicalOperator> &logical_operator,
+      std::unique_ptr<Expression> &having_expr);
 
   int implicit_cast_cost(AttrType from, AttrType to);
 };

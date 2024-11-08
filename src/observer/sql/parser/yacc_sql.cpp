@@ -2902,7 +2902,7 @@ yyreduce:
   case 100: /* limit: %empty  */
 #line 975 "yacc_sql.y"
   {
-    (yyval.number) = -1; // set to invalid number
+    (yyval.number) = INT_MAX; // set to invalid number
   }
 #line 2908 "yacc_sql.cpp"
     break;

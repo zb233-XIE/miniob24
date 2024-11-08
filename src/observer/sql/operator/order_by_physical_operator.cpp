@@ -1,51 +1,61 @@
 #include "sql/operator/order_by_physical_operator.h"
+#include "common/log/log.h"
+#include "common/value.h"
 #include "sql/expr/expression_tuple.h"
+#include "sql/expr/tuple.h"
+#include "sql/expr/tuple_cell.h"
 #include <algorithm>
+#include <cstring>
+#include <vector>
 
 OrderByPhysicalOperator::~OrderByPhysicalOperator() {}
 
-RC OrderByPhysicalOperator::open(Trx *trx) {
+RC OrderByPhysicalOperator::open(Trx *trx)
+{
   RC rc = RC::SUCCESS;
-  rc = children_[0]->open(trx);
+  rc    = children_[0]->open(trx);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to open child operator. rc=%s", strrc(rc));
   }
 
-  TupleSchema schema;
-  children_[0]->tuple_schema(schema);
-  current_tuple_.set_names(schema.cells());
+  if (!vector_order_by_) {
+    TupleSchema schema;
+    children_[0]->tuple_schema(schema);
+    current_tuple_.set_names(schema.cells());
 
-  int cell_num = schema.cell_num();
+    int cell_num = schema.cell_num();
 
-  for (size_t i = 0; i < items_.size(); i++) {
-    int found_field_index = -1;
-    const OrderByItem &item = items_[i];
-    for (int j = 0; j < cell_num; j++) {
-      const TupleCellSpec spec = schema.cell_at(j);
-      string item_attr_name;
-      if (strlen(item.attr.relation_name.c_str()) == 0) {
-        item_attr_name = item.attr.attribute_name;
-      } else {
-        item_attr_name = item.attr.relation_name + "." + item.attr.attribute_name;
+    for (size_t i = 0; i < items_.size(); i++) {
+      int                found_field_index = -1;
+      const OrderByItem &item              = items_[i];
+      for (int j = 0; j < cell_num; j++) {
+        const TupleCellSpec spec = schema.cell_at(j);
+        string              item_attr_name;
+        if (strlen(item.attr.relation_name.c_str()) == 0) {
+          item_attr_name = item.attr.attribute_name;
+        } else {
+          item_attr_name = item.attr.relation_name + "." + item.attr.attribute_name;
+        }
+
+        if (item_attr_name == spec.alias()) {
+          item_indexes_.push_back(j);
+          found_field_index = j;
+          break;
+        }
       }
 
-      if (item_attr_name == spec.alias()) {
-        item_indexes_.push_back(j);
-        found_field_index = j;
-        break;
+      if (found_field_index == -1) {
+        LOG_WARN("failed to find field %s.%s", item.attr.relation_name.c_str(), item.attr.attribute_name.c_str());
+        return RC::FILE_NOT_EXIST;
       }
-    }
-
-    if (found_field_index == -1) {
-      LOG_WARN("failed to find field %s.%s", item.attr.relation_name.c_str(), item.attr.attribute_name.c_str());
-      return RC::FILE_NOT_EXIST;
     }
   }
 
   return rc;
 }
 
-RC OrderByPhysicalOperator::close() {
+RC OrderByPhysicalOperator::close()
+{
   RC rc = children_[0]->close();
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to close child operator. rc=%s", strrc(rc));
@@ -53,12 +63,13 @@ RC OrderByPhysicalOperator::close() {
   return rc;
 }
 
-RC OrderByPhysicalOperator::sort() {
+RC OrderByPhysicalOperator::sort()
+{
   sorted_ = true;
-  RC rc = RC::SUCCESS;
+  RC rc   = RC::SUCCESS;
 
   while (children_[0]->next() == RC::SUCCESS) {
-    auto *tuple = dynamic_cast<ExpressionTuple<std::unique_ptr<Expression>> *>(children_[0]->current_tuple());
+    auto       *tuple = dynamic_cast<ExpressionTuple<std::unique_ptr<Expression>> *>(children_[0]->current_tuple());
     TupleSchema schema;
     children_[0]->tuple_schema(schema);
     int cell_num = schema.cell_num();
@@ -74,9 +85,9 @@ RC OrderByPhysicalOperator::sort() {
 
   auto cmp_func = [&](const OrderByTuple &a, const OrderByTuple &b) {
     for (size_t i = 0; i < items_.size(); i++) {
-      const OrderByItem &item = items_[i];
-      const int item_idx = item_indexes_[i];
-      const Value &a_val = a[item_idx], &b_val = b[item_idx];
+      const OrderByItem &item     = items_[i];
+      const int          item_idx = item_indexes_[i];
+      const Value       &a_val = a[item_idx], &b_val = b[item_idx];
       if (a_val.get_null() && b_val.get_null()) {
         continue;
       }
@@ -100,27 +111,94 @@ RC OrderByPhysicalOperator::sort() {
   return rc;
 }
 
-RC OrderByPhysicalOperator::next() {
+RC OrderByPhysicalOperator::vector_sort()
+{
+  sorted_ = true;
+
+  while (children_[0]->next() == RC::SUCCESS) {
+    auto *row_tuple = dynamic_cast<RowTuple *>(children_[0]->current_tuple());
+    int   cell_num  = row_tuple->cell_num();
+    if (query_cell_index == -1) {
+      // init the cell num to check & tuple schema for current_tuple
+      vector<TupleCellSpec> specs;
+      for (int i = 0; i < cell_num; i++) {
+        TupleCellSpec spec;
+        row_tuple->spec_at(i, spec);
+        if (0 == strcmp(spec.field_name(), query_field_name_.c_str())) {
+          query_cell_index = i;
+        }
+        specs.push_back(std::move(spec));
+      }
+      current_tuple_.set_names(specs);
+      ASSERT(query_cell_index >= 0 && query_cell_index < cell_num, "");
+    }
+
+    vector<Value> record_cells;
+    Value         distance;
+    for (int i = 0; i < cell_num; i++) {
+      Value cell;
+      row_tuple->cell_at(i, cell);
+      if (i == query_cell_index) {
+        calc_distance_(cell, feature_vector_, distance);
+      }
+      record_cells.push_back(cell);
+    }
+    vector_sorted_tuples_.push_back({std::move(record_cells), distance.get_float()});
+  }
+
+  std::sort(vector_sorted_tuples_.begin(), vector_sorted_tuples_.end());
+
+  return RC::SUCCESS;
+}
+
+RC OrderByPhysicalOperator::next()
+{
   if (!sorted_) {
-    RC rc = sort();
+    RC rc = RC::SUCCESS;
+    if (vector_order_by_) {
+      rc = vector_sort();
+    } else {
+      rc = sort();
+    }
     if (rc != RC::SUCCESS) {
       return rc;
     }
   }
 
-  if (sorted_tuples_.empty() || ++cur_idx >= static_cast<int>(sorted_tuples_.size())) {
-    return RC::RECORD_EOF;
-  }
-
-  if (cur_idx < static_cast<int>(sorted_tuples_.size())) {
-    current_tuple_.set_cells(sorted_tuples_[cur_idx]);
+  if (vector_order_by_) {
+    if (++cur_idx >= static_cast<int>(vector_sorted_tuples_.size())) {
+      return RC::RECORD_EOF;
+    }
+    auto &value = vector_sorted_tuples_[cur_idx].value;
+    current_tuple_.set_cells(std::move(value));
+  } else {
+    if (sorted_tuples_.empty()) {
+      return RC::RECORD_EOF;
+    }
+    if (++cur_idx >= static_cast<int>(sorted_tuples_.size())) {
+      return RC::RECORD_EOF;
+    }
+    if (cur_idx < static_cast<int>(sorted_tuples_.size())) {
+      current_tuple_.set_cells(sorted_tuples_[cur_idx]);
+    }
   }
   return RC::SUCCESS;
 }
 
-Tuple *OrderByPhysicalOperator::current_tuple() {
-  if (cur_idx < 0 || cur_idx >= static_cast<int>(sorted_tuples_.size())) {
+Tuple *OrderByPhysicalOperator::current_tuple()
+{
+  if (cur_idx < 0) {
     return nullptr;
+  }
+
+  if (vector_order_by_) {
+    if (cur_idx >= static_cast<int>(vector_sorted_tuples_.size())) {
+      return nullptr;
+    }
+  } else {
+    if (cur_idx >= static_cast<int>(sorted_tuples_.size())) {
+      return nullptr;
+    }
   }
 
   return &current_tuple_;

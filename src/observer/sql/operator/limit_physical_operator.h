@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sql/expr/tuple.h"
 #include "sql/operator/physical_operator.h"
 
 class LimitPhysicalOperator : public PhysicalOperator
@@ -13,7 +14,8 @@ public:
   RC open(Trx *trx) override;
   RC next() override;
   RC close() override;
+  Tuple* current_tuple() override;
 
 private:
-  int limits_ [[maybe_unused]];
+  int limits_;
 };

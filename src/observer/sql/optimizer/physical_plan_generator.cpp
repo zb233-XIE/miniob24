@@ -14,6 +14,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "common/log/log.h"
 #include "common/rc.h"
@@ -162,44 +163,26 @@ RC PhysicalPlanGenerator::create_vec(LogicalOperator &logical_operator, unique_p
 
 RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, unique_ptr<PhysicalOperator> &oper)
 {
-  vector<unique_ptr<Expression>> &predicates = table_get_oper.predicates();
-  // 看看是否有可以用于索引查找的表达式
   Table *table = table_get_oper.table();
 
+  if (table_get_oper.vector_index_hit()) {
+    VectorIndexScanPhysicalOperator *vec_index_scan_oper = new VectorIndexScanPhysicalOperator(table,
+        table_get_oper.index(),
+        table_get_oper.read_write_mode(),
+        std::move(table_get_oper.feature_vector()),
+        table_get_oper.limit());
+    oper                                                 = unique_ptr<PhysicalOperator>(vec_index_scan_oper);
+    LOG_TRACE("use vector index scan");
+    return RC::SUCCESS;
+  }
+
+  vector<unique_ptr<Expression>> &predicates = table_get_oper.predicates();
+  // 看看是否有可以用于索引查找的表达式
   Index     *index      = nullptr;
   ValueExpr *value_expr = nullptr;
 
-  bool vector_index_hit          = false;
-  auto vector_distance_algorithm = DISTANCE_ALGO::NONE;
-
   for (auto &expr : predicates) {
-    if (expr->type() == ExprType::ARITHMETIC) {
-      // only for vector type arithmatic
-      // index hit, already checked in generate_logical_plan
-      auto vector_arith_expr = static_cast<ArithmeticExpr *>(expr.get());
-
-      unique_ptr<Expression> &left_expr     = vector_arith_expr->left();
-      unique_ptr<Expression> &right_expr    = vector_arith_expr->right();
-
-      UnboundFieldExpr *ub_field_expr = nullptr;
-      if (left_expr->type() == ExprType::UNBOUND_FIELD) {
-        ASSERT(right_expr->type() == ExprType::VALUE, "right expr should be a value expr while left is field expr");
-        ub_field_expr = static_cast<UnboundFieldExpr *>(left_expr.get());
-        value_expr    = static_cast<ValueExpr *>(right_expr.get());
-      } else if (right_expr->type() == ExprType::UNBOUND_FIELD) {
-        ASSERT(left_expr->type() == ExprType::VALUE, "left expr should be a value expr while right is a field expr");
-        ub_field_expr = static_cast<UnboundFieldExpr *>(right_expr.get());
-        value_expr    = static_cast<ValueExpr *>(left_expr.get());
-      }
-      ASSERT(ub_field_expr != nullptr, "");
-
-      index = table->find_index_by_field(ub_field_expr->field_name());
-      ASSERT(index != nullptr, "");
-
-      vector_distance_algorithm = index->index_meta().alrgorithm();
-      vector_index_hit          = true;
-      break;
-    } else if (expr->type() == ExprType::COMPARISON) {
+    if (expr->type() == ExprType::COMPARISON) {
       auto comparison_expr = static_cast<ComparisonExpr *>(expr.get());
       // 简单处理，就找等值查询
       if (comparison_expr->comp() != EQUAL_TO) {
@@ -238,34 +221,18 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
 
   if (index != nullptr) {
     ASSERT(value_expr != nullptr, "got an index but value expr is null ?");
-    if (vector_index_hit) {
-      const Value &value = value_expr->get_value();
-      if (value.attr_type() != AttrType::VECTORS) {
-        Value real_value;
-        Value::cast_to(value, AttrType::VECTORS, real_value);
-        VectorIndexScanPhysicalOperator *vector_index_scan_oper = new VectorIndexScanPhysicalOperator(table,
-            index,
-            table_get_oper.read_write_mode(),
-            &real_value,
-            vector_distance_algorithm,
-            table_get_oper.limit());
-        oper                                                    = unique_ptr<PhysicalOperator>(vector_index_scan_oper);
-        LOG_TRACE("use vector index scan");
-      }
-    } else {
-      const Value               &value           = value_expr->get_value();
-      IndexScanPhysicalOperator *index_scan_oper = new IndexScanPhysicalOperator(table,
-          index,
-          table_get_oper.read_write_mode(),
-          &value,
-          true /*left_inclusive*/,
-          &value,
-          true /*right_inclusive*/);
+    const Value               &value           = value_expr->get_value();
+    IndexScanPhysicalOperator *index_scan_oper = new IndexScanPhysicalOperator(table,
+        index,
+        table_get_oper.read_write_mode(),
+        &value,
+        true /*left_inclusive*/,
+        &value,
+        true /*right_inclusive*/);
 
-      index_scan_oper->set_predicates(std::move(predicates));
-      oper = unique_ptr<PhysicalOperator>(index_scan_oper);
-      LOG_TRACE("use index scan");
-    }
+    index_scan_oper->set_predicates(std::move(predicates));
+    oper = unique_ptr<PhysicalOperator>(index_scan_oper);
+    LOG_TRACE("use index scan");
   } else {
     auto table_scan_oper = new TableScanPhysicalOperator(table, table_get_oper.read_write_mode());
     table_scan_oper->set_predicates(std::move(predicates));
@@ -552,9 +519,19 @@ RC PhysicalPlanGenerator::create_plan(DumbLogicalOperator &logical_oper, std::un
 
 RC PhysicalPlanGenerator::create_plan(OrderByLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
 {
-  RC                       rc            = RC::SUCCESS;
-  OrderByPhysicalOperator *order_by_oper = new OrderByPhysicalOperator(std::move(logical_oper.items()));
-  oper                                   = std::unique_ptr<PhysicalOperator>(order_by_oper);
+  RC rc = RC::SUCCESS;
+  if (logical_oper.is_vector_order_by()) {
+    const string            &query_field_name   = logical_oper.vector_query_field();
+    Value                   &feature_vector     = logical_oper.feature_vector();
+    DISTANCE_ALGO            distance_algorithm = logical_oper.distance_algorithm();
+    OrderByPhysicalOperator *order_by_oper =
+        new OrderByPhysicalOperator(std::move(feature_vector), query_field_name, distance_algorithm);
+    oper = std::unique_ptr<PhysicalOperator>(order_by_oper);
+
+  } else {
+    OrderByPhysicalOperator *order_by_oper = new OrderByPhysicalOperator(std::move(logical_oper.items()));
+    oper                                   = std::unique_ptr<PhysicalOperator>(order_by_oper);
+  }
 
   LogicalOperator             &child_oper = *logical_oper.children().front();
   unique_ptr<PhysicalOperator> child_physical_oper;
@@ -569,8 +546,8 @@ RC PhysicalPlanGenerator::create_plan(OrderByLogicalOperator &logical_oper, std:
 
 RC PhysicalPlanGenerator::create_plan(ViewGetLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper)
 {
-  RC rc = RC::SUCCESS;
-  LogicalOperator &child_oper = *logical_oper.children().front();
+  RC                           rc         = RC::SUCCESS;
+  LogicalOperator             &child_oper = *logical_oper.children().front();
   unique_ptr<PhysicalOperator> child_physical_oper;
   rc = create(child_oper, child_physical_oper);
   if (rc != RC::SUCCESS) {
@@ -592,9 +569,9 @@ RC PhysicalPlanGenerator::create_plan(LimitLogicalOperator &logical_oper, std::u
   RC rc = RC::SUCCESS;
 
   LimitPhysicalOperator *limit_oper = new LimitPhysicalOperator(logical_oper.limits());
-  oper = std::unique_ptr<PhysicalOperator>(limit_oper);
+  oper                              = std::unique_ptr<PhysicalOperator>(limit_oper);
 
-  LogicalOperator &child_oper = *logical_oper.children().front();
+  LogicalOperator             &child_oper = *logical_oper.children().front();
   unique_ptr<PhysicalOperator> child_physical_oper;
   rc = create(child_oper, child_physical_oper);
   if (rc != RC::SUCCESS) {

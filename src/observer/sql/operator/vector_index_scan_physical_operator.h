@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/expr/tuple.h"
 #include "sql/operator/physical_operator.h"
 #include "sql/parser/parse_defs.h"
+#include "storage/index/index.h"
 #include "storage/record/record_manager.h"
 
 /**
@@ -27,8 +28,7 @@ See the Mulan PSL v2 for more details. */
 class VectorIndexScanPhysicalOperator : public PhysicalOperator
 {
 public:
-  VectorIndexScanPhysicalOperator(Table *table, Index *index, ReadWriteMode mode, Value *feature_vector,
-      DISTANCE_ALGO distance_algorithm, int limits = -1);
+  VectorIndexScanPhysicalOperator(Table *table, Index *index, ReadWriteMode mode, Value &&feature_vector, int limits);
 
   virtual ~VectorIndexScanPhysicalOperator() = default;
 
@@ -54,9 +54,8 @@ private:
   IndexScanner      *index_scanner_ [[maybe_unused]]  = nullptr;
   RecordFileHandler *record_handler_ [[maybe_unused]] = nullptr;
 
-  Record        current_record_ [[maybe_unused]];
-  RowTuple      tuple_ [[maybe_unused]];
-  Value         feature_vector_ [[maybe_unused]];
-  int           limits_ [[maybe_unused]];
-  DISTANCE_ALGO distance_algorithm_ [[maybe_unused]];
+  Record   current_record_ [[maybe_unused]];
+  RowTuple tuple_ [[maybe_unused]];
+  Value    feature_vector_ [[maybe_unused]];
+  int      limits_ [[maybe_unused]];
 };
