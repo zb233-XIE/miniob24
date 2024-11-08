@@ -27,7 +27,24 @@ using namespace std;
 
 RC FieldExpr::get_value(const Tuple &tuple, Value &value) const
 {
-  return tuple.find_cell(TupleCellSpec(table_name(), field_name()), value);
+  if (table()->view() != nullptr) {
+    View *view = table()->view();
+    ASSERT(view->is_lookup_map_set(), "lookup map is not set");
+    string str_to_look_up = std::string(table_name()) + "." + std::string(view->col_names()[field_id()]);
+    string str_looked_up;
+    RC rc = view->look_up(str_to_look_up, str_looked_up);
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("lookup failed. rc=%s", strrc(rc));
+      return rc;
+    }
+
+    return tuple.find_cell(TupleCellSpec(str_looked_up), value);
+  }
+  TupleCellSpec spec(table_name(), field_name());
+  if (strcmp(name(), field_name()) != 0 && strcmp(name(), spec.alias()) != 0) {
+    spec.set_alias2(name());
+  }
+  return tuple.find_cell(spec , value);
 }
 
 bool FieldExpr::equal(const Expression &other) const

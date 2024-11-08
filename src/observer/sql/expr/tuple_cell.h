@@ -29,13 +29,23 @@ public:
   const char *field_name() const { return field_name_.c_str(); }
   const char *alias() const { return alias_.c_str(); }
 
+  void set_alias2(std::string alias) { alias2_ = alias; alias2_set_ = true; }
+  const char *get_alias2() const { return alias2_.c_str(); }
+  bool is_alias2_set() const { return alias2_set_; }
+
   bool equals(const TupleCellSpec &other) const
   {
-    return table_name_ == other.table_name_ && field_name_ == other.field_name_ && alias_ == other.alias_;
+    if (alias2_set_ && other.alias2_set_) {
+      return alias2_ == other.alias2_;
+    }
+    return (table_name_ == other.table_name_ && field_name_ == other.field_name_ && alias_ == other.alias_)
+      || (alias_ == other.alias_);
   }
 
 private:
   std::string table_name_;
   std::string field_name_;
   std::string alias_;
+  bool alias2_set_ = false;
+  std::string alias2_;
 };

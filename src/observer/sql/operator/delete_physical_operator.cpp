@@ -33,6 +33,16 @@ RC DeletePhysicalOperator::open(Trx *trx)
 
   trx_ = trx;
 
+  bool has_view = false;
+  if (table_->view() != nullptr) {
+    has_view = true;
+    table_ = table_->view()->handle_view_delete();
+    if (table_ == nullptr) {
+      LOG_WARN("failed to handle view delete");
+      return RC::INTERNAL;
+    }
+  }
+
   while (OB_SUCC(rc = child->next())) {
     Tuple *tuple = child->current_tuple();
     if (nullptr == tuple) {
@@ -40,9 +50,23 @@ RC DeletePhysicalOperator::open(Trx *trx)
       return rc;
     }
 
-    RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
-    Record   &record    = row_tuple->record();
-    records_.emplace_back(std::move(record));
+    if (has_view) {
+      ValueListTuple *val_list_tuple = static_cast<ValueListTuple *>(tuple);
+      if (val_list_tuple->is_record_set()) {
+        Record record = val_list_tuple->record();
+        records_.emplace_back(std::move(record));
+      } else if (val_list_tuple->is_joined_map_set()) {
+        Record record;
+        val_list_tuple->lookup_joined_map(table_->name(), record);
+        records_.emplace_back(record);
+      } else {
+        return RC::INVALID_ARGUMENT;
+      }
+    } else {
+      RowTuple *row_tuple = static_cast<RowTuple *>(tuple);
+      Record   &record    = row_tuple->record();
+      records_.emplace_back(std::move(record));
+    }
   }
 
   child->close();

@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 #include "common/lang/string.h"
+#include "sql/parser/parse_defs.h"
 
 class TableMeta;
 class FieldMeta;
@@ -35,12 +36,14 @@ class IndexMeta
 public:
   IndexMeta() = default;
 
-  RC init(const char *name, const std::vector<FieldMeta> &fields, bool unique);
+  RC init(const char *name, const std::vector<FieldMeta> &fields, bool unique,
+      DISTANCE_ALGO distance_algorithm = DISTANCE_ALGO::NONE);
 
 public:
-  const char *name() const;
+  const char               *name() const;
   const std::vector<string> fields() const;
-  bool unique() const;
+  bool                      unique() const;
+  DISTANCE_ALGO             alrgorithm() const;
 
   void desc(ostream &os) const;
 
@@ -49,7 +52,8 @@ public:
   static RC from_json(const TableMeta &table, const Json::Value &json_value, IndexMeta &index);
 
 protected:
-  string name_;   // index's name
-  std::vector<string> fields_; // fields' name
-  bool unique_;   // unique index
+  string              name_;                // index's name
+  std::vector<string> fields_;              // fields' name
+  bool                unique_;              // unique index
+  DISTANCE_ALGO       distance_algorithm_;  // for vector type index
 };

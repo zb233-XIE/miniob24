@@ -23,6 +23,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "common/os/path.h"
 #include "common/global_context.h"
+#include "sql/stmt/select_stmt.h"
 #include "storage/common/meta_util.h"
 #include "storage/index/index.h"
 #include "storage/table/table.h"
@@ -30,6 +31,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/trx/trx.h"
 #include "storage/clog/disk_log_handler.h"
 #include "storage/clog/integrated_log_replayer.h"
+#include "storage/table/view.h"
 
 using namespace common;
 
@@ -162,6 +164,18 @@ RC Db::create_table(const char *table_name, span<const AttrInfoSqlNode> attribut
   return RC::SUCCESS;
 }
 
+RC Db::create_view(const char *view_name, const vector<string> &col_names, std::string select_sql_str, const std::vector<AttrInfoSqlNode> &attr_infos,
+                    const std::vector<ViewMetaInfo> &view_meta_infos) {
+  View *view = new View(view_name, col_names, select_sql_str, this, view_meta_infos);
+  Table *table = new Table(view);
+  view->init_fields(attr_infos);
+  for (size_t i = 0; i < col_names.size(); i++) {
+    view->insert_col_field(col_names[i], attr_infos[i].name);
+  }
+  opened_tables_[view_name] = table;
+  return RC::SUCCESS;
+}
+
 RC Db::drop_table(const char *table_name) {
   if (opened_tables_.count(table_name) == 0) {
     LOG_WARN("attempt to drop a non-exist table: %s", table_name);
@@ -274,6 +288,10 @@ RC Db::sync()
   // 调用所有表的sync函数刷新数据到磁盘
   for (const auto &table_pair : opened_tables_) {
     Table *table = table_pair.second;
+    if (table->view() != nullptr) {
+      continue;
+    }
+
     rc           = table->sync();
     if (rc != RC::SUCCESS) {
       LOG_ERROR("Failed to flush table. table=%s.%s, rc=%d:%s", name_.c_str(), table->name(), rc, strrc(rc));

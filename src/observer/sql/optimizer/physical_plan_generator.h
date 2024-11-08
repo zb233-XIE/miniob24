@@ -17,8 +17,6 @@ See the Mulan PSL v2 for more details. */
 #include "common/rc.h"
 #include "sql/operator/logical_operator.h"
 #include "sql/operator/physical_operator.h"
-#include "sql/operator/update_logical_operator.h"
-#include "sql/operator/order_by_logical_operator.h"
 
 class TableGetLogicalOperator;
 class PredicateLogicalOperator;
@@ -30,7 +28,11 @@ class JoinLogicalOperator;
 class CalcLogicalOperator;
 class GroupByLogicalOperator;
 class SubqueryLogicalOperator;
+class ViewGetLogicalOperator;
 class DumbLogicalOperator;
+class UpdateLogicalOperator;
+class OrderByLogicalOperator;
+class LimitLogicalOperator;
 
 /**
  * @brief 物理计划生成器
@@ -62,6 +64,8 @@ private:
   RC create_plan(GroupByLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(DumbLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_plan(OrderByLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
+  RC create_plan(ViewGetLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
+  RC create_plan(LimitLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_vec_plan(ProjectLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_vec_plan(TableGetLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);
   RC create_vec_plan(GroupByLogicalOperator &logical_oper, std::unique_ptr<PhysicalOperator> &oper);

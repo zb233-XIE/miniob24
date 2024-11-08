@@ -40,6 +40,9 @@ public:
   void set_multi_tables_flag() { multi_tables_flag_ = 1; }
   int get_multi_tables_flag() const { return multi_tables_flag_; }
 
+  void set_has_view_flag() { has_view_flag_ = 1; }
+  int get_has_view_flag() const { return has_view_flag_; }
 private:
   int multi_tables_flag_ = 0;
+  int has_view_flag_ = 0;
 };

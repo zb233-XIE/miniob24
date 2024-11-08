@@ -35,6 +35,7 @@ public:
 
   const char *table_name() const { return table_->name(); }
   const char *field_name() const { return field_->name(); }
+  int         field_id() const { return field_->field_id(); } 
 
   void set_table(const Table *table) { this->table_ = table; }
   void set_field(const FieldMeta *field) { this->field_ = field; }

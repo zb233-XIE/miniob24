@@ -1,12 +1,14 @@
 
 %{
 
+#include <cstdint>
 #include <stdio.h>
 #include <time.h>
-#include <string.h>
 #include <stdlib.h>
 #include <string.h>
 #include <algorithm>
+#include <utility>
+#include <limits>
 
 #include "common/log/log.h"
 #include "common/lang/string.h"
@@ -14,6 +16,7 @@
 #include "sql/parser/yacc_sql.hpp"
 #include "sql/parser/lex_sql.h"
 #include "sql/expr/expression.h"
+#include "common/type/attr_type.h"
 
 using namespace std;
 
@@ -109,6 +112,7 @@ bool is_valid_date(const char *date) {
         FLOAT_T
         VECTOR_T
         DATE_T
+        TEXT_T
         HELP
         EXIT
         DOT //QUOTE
@@ -146,17 +150,25 @@ bool is_valid_date(const char *date) {
         UNIQUE
         LBRACKET
         RBRACKET
+        WITH
+        DISTANCE
+        TYPE
+        LISTS
+        PROBES
+        IVFFLAT
         L2_DISTANCE
         COSINE_DISTANCE
         INNER_PRODUCT
         EXISTS_T
         NOT
         IN_T
-
+        VIEW
         NULL_T
         NOT_NULL_T
 				ORDER_BY
 				ASC
+        AS
+        LIMIT
 
 /** union 中定义各种数据类型，真实生成的代码也是union类型，所以不能有非POD类型的数据 **/
 %union {
@@ -168,6 +180,7 @@ bool is_valid_date(const char *date) {
   SetClauseSqlNode *                         set_clause;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
+  RelationSqlNode *                          relation;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   // std::vector<Expression *> *                agg_fun_attr_list;
@@ -178,15 +191,18 @@ bool is_valid_date(const char *date) {
   std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *> *  join_tuple_list;
   std::tuple<std::string, std::vector<ConditionSqlNode> *> *  join_tuple;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  std::vector<RelationSqlNode> *             relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
   std::vector<float> *                       vector_elem_list;
+  std::vector<std::string> *                 id_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
   char *                                     date;
   bool                                       nullable_spec;
   bool                                       asc_desc;
+  VecIndexFieldAnno                          vec_index_param;
+  std::vector<VecIndexFieldAnno> *           vec_index_param_list;
 }
 
 %token <number> NUMBER
@@ -201,8 +217,7 @@ bool is_valid_date(const char *date) {
 %type <condition>           condition
 %type <value>               value
 %type <number>              number
-%type <string>              relation
-/* %type <condition>           subquery */
+%type <relation>            relation
 %type <comp>                comp_op
 %type <rel_attr>            rel_attr
 %type <expression>          agg_fun_attr
@@ -228,10 +243,14 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            update_stmt
 %type <sql_node>            delete_stmt
 %type <sql_node>            create_table_stmt
+%type <sql_node>            create_view_stmt
 %type <sql_node>            drop_table_stmt
 %type <sql_node>            show_tables_stmt
 %type <sql_node>            desc_table_stmt
 %type <sql_node>            create_index_stmt
+%type <sql_node>            create_vector_index_stmt
+%type <vec_index_param>     vector_index_field;
+%type <vec_index_param_list>vector_index_param_list;
 %type <sql_node>            drop_index_stmt
 %type <sql_node>            sync_stmt
 %type <sql_node>            begin_stmt
@@ -243,13 +262,18 @@ bool is_valid_date(const char *date) {
 %type <sql_node>            help_stmt
 %type <sql_node>            exit_stmt
 %type <sql_node>            command_wrapper
+%type <sql_node>            as_select
+%type <id_list>             id_list
 %type <set_clause>          set_clause
 %type <set_clause_list>     set_clause_list
 %type <nullable_spec>       nullable_spec
 %type <order_by_item>       order_by_item
 %type <asc_desc>            asc_desc
+%type  <number>             limit
 %type <order_by_list>       order_by_list
 %type <order_by_list>       order_by
+%type <string>              id_maybe_keyword
+%type <id_list>             insert_name_lists
 
 // commands should be a list but I use a single command instead
 %type <sql_node>            commands
@@ -274,10 +298,12 @@ command_wrapper:
   | update_stmt
   | delete_stmt
   | create_table_stmt
+  | create_view_stmt
   | drop_table_stmt
   | show_tables_stmt
   | desc_table_stmt
   | create_index_stmt
+  | create_vector_index_stmt
   | drop_index_stmt
   | sync_stmt
   | begin_stmt
@@ -289,6 +315,53 @@ command_wrapper:
   | help_stmt
   | exit_stmt
     ;
+
+id_maybe_keyword:
+  ID {
+    $$ = $1;
+  }
+  | DATA {
+    $$ = strdup("data");
+  }
+  | MIN {
+    $$ = strdup("min");
+  }
+  | MAX {
+    $$ = strdup("max");
+  }
+  | AVG {
+    $$ = strdup("avg");
+  }
+  | SUM {
+    $$ = strdup("sum");
+  }
+  | COUNT {
+    $$ = strdup("count");
+  }
+
+
+id_list:
+  {
+    $$ = nullptr;
+  }
+  | id_maybe_keyword {
+    $$ = new std::vector<std::string>;
+    $$->emplace_back($1);
+    free($1);
+  }
+  | id_maybe_keyword COMMA id_list {
+    if ($3 != nullptr) {
+      $$ = $3;
+    } else {
+      $$ = new std::vector<std::string>;
+    }
+    $$->emplace($$->begin(), $1);
+    free($1);
+  }
+  | LBRACE id_list RBRACE {
+    $$ = $2;
+  }
+  ;
 
 exit_stmt:      
     EXIT {
@@ -326,7 +399,7 @@ rollback_stmt:
     ;
 
 drop_table_stmt:    /*drop table 语句的语法解析树*/
-    DROP TABLE ID {
+    DROP TABLE id_maybe_keyword {
       $$ = new ParsedSqlNode(SCF_DROP_TABLE);
       $$->drop_table.relation_name = $3;
       free($3);
@@ -339,7 +412,7 @@ show_tables_stmt:
     ;
 
 desc_table_stmt:
-    DESC ID  {
+    DESC id_maybe_keyword  {
       $$ = new ParsedSqlNode(SCF_DESC_TABLE);
       $$->desc_table.relation_name = $2;
       free($2);
@@ -347,29 +420,38 @@ desc_table_stmt:
     ;
 
 create_index_stmt:    /*create index 语句的语法解析树*/
-    CREATE INDEX ID ON ID LBRACE rel_list RBRACE
+    CREATE INDEX id_maybe_keyword ON id_maybe_keyword LBRACE rel_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $3;
       create_index.relation_name = $5;
       create_index.unique = false;
+
       if ($7 != nullptr) {
-        create_index.attributes.swap(*$7);
+        std::vector<std::string> attributes;
+        for (auto &rel : *$7) {
+          attributes.emplace_back(rel.name);
+        }
+        create_index.attributes.swap(attributes);
         delete $7;
       }
       free($3);
       free($5);
     }
-    | CREATE UNIQUE INDEX ID ON ID LBRACE rel_list RBRACE
+    | CREATE UNIQUE INDEX id_maybe_keyword ON id_maybe_keyword LBRACE rel_list RBRACE
     {
       $$ = new ParsedSqlNode(SCF_CREATE_INDEX);
       CreateIndexSqlNode &create_index = $$->create_index;
       create_index.index_name = $4;
       create_index.relation_name = $6;
       create_index.unique = true;
-      if ($8 != nullptr) {
-        create_index.attributes.swap(*$8);
+      if ($8 != nullptr) {        
+        std::vector<std::string> attributes;
+        for (auto &rel : *$8) {
+          attributes.emplace_back(rel.name);
+        }
+        create_index.attributes.swap(attributes);
         delete $8;
       }
       free($4);
@@ -377,8 +459,125 @@ create_index_stmt:    /*create index 语句的语法解析树*/
     }
     ;
 
+create_vector_index_stmt:
+    CREATE VECTOR_T INDEX ID ON relation LBRACE ID RBRACE WITH LBRACE vector_index_param_list RBRACE
+    {
+      $$ = new ParsedSqlNode(SCF_CREATE_VECTOR_INDEX);
+      CreateVectorIndexSqlNode &create_vector_index = $$->create_vector_index;
+      create_vector_index.index_name    = $4;
+      free($4);
+      create_vector_index.relation_name = $6->name;
+      create_vector_index.attribute     = $8;
+      free($8);
+
+      create_vector_index.distance_algo = DISTANCE_ALGO::NONE;
+      create_vector_index.type          = false;
+      create_vector_index.centroids     = -1;
+      create_vector_index.probes        = -1;
+
+      int param_count = $12->size();
+      if(param_count != static_cast<int>(VecIndexField::FIELD_COUNT)){
+        yyerror(&@1, NULL, sql_result, NULL, SCF_ERROR_CREATE_VECTOR_INDEX, "param mismatch, need: {distance, type, lists, probes}");
+      } else {
+        bool flag = true;
+        string err_msg;
+        for(auto param: (*$12)){
+          switch (static_cast<int>(param.field)){
+            case static_cast<int>(VecIndexField::DISTANCE_FIELD): {
+              if(create_vector_index.distance_algo != DISTANCE_ALGO::NONE){
+                flag = false;
+                err_msg = "distance field already set";
+              }
+              create_vector_index.distance_algo = static_cast<DISTANCE_ALGO>(param.value);
+            } break;
+            case static_cast<int>(VecIndexField::TYPE_FIELD): {
+              if(create_vector_index.type){
+                flag = false;
+                err_msg = "index type field already set";
+              }
+              create_vector_index.type = true;
+            } break;
+            case static_cast<int>(VecIndexField::LISTS_FIELD): {
+              if(create_vector_index.centroids != -1){
+                flag = false;
+                err_msg = "lists field already set";
+              }
+              if(param.value < 0){
+                flag = false;
+                err_msg = "lists field must be positive integer";
+              }
+              create_vector_index.centroids = param.value;
+            } break;
+            case static_cast<int>(VecIndexField::PROBES_FIELD): {
+              if(create_vector_index.probes != -1){
+                flag = false;
+                err_msg = "probe field already set";
+              }
+              if(param.value < 0){
+                flag = false;
+                err_msg = "probe field must be positive integer";
+              }
+              create_vector_index.probes = param.value;
+            } break;
+            default: {
+              flag = false;
+              break;
+            }
+          }
+          if(!flag) break;
+        }
+        if(!flag){
+          yyerror(&@1, NULL, sql_result, NULL, SCF_ERROR_CREATE_VECTOR_INDEX, err_msg.c_str());
+        }
+      }
+      // error handling
+    }
+    ;
+
+vector_index_param_list:
+    vector_index_field {
+      $$ = new std::vector<VecIndexFieldAnno>();
+      $$->push_back($1);
+    }
+    | vector_index_field COMMA vector_index_param_list {
+      if($3 != nullptr){
+        $$ = $3;
+      } else {
+        $$ = new std::vector<VecIndexFieldAnno>();
+      }
+      $$->push_back($1);
+    }
+    ;
+
+vector_index_field:
+    DISTANCE EQ L2_DISTANCE
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::DISTANCE_FIELD, static_cast<int>(DISTANCE_ALGO::L2_DISTANCE)};
+    }
+    | DISTANCE EQ COSINE_DISTANCE
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::DISTANCE_FIELD, static_cast<int>(DISTANCE_ALGO::COSINE_DISTANCE)};
+    }
+    | DISTANCE EQ INNER_PRODUCT
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::DISTANCE_FIELD, static_cast<int>(DISTANCE_ALGO::INNER_PRODUCT)};
+    }
+    | TYPE EQ IVFFLAT
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::TYPE_FIELD, 1};
+    }
+    | LISTS EQ NUMBER
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::LISTS_FIELD, $3};
+    }
+    | PROBES EQ NUMBER
+    {
+      $$ = VecIndexFieldAnno{VecIndexField::PROBES_FIELD, $3};
+    }
+    ;
+
 drop_index_stmt:      /*drop index 语句的语法解析树*/
-    DROP INDEX ID ON ID
+    DROP INDEX id_maybe_keyword ON id_maybe_keyword
     {
       $$ = new ParsedSqlNode(SCF_DROP_INDEX);
       $$->drop_index.index_name = $3;
@@ -387,8 +586,20 @@ drop_index_stmt:      /*drop index 语句的语法解析树*/
       free($5);
     }
     ;
+
+as_select:
+  {
+    $$ = nullptr;
+  }
+  | AS select_stmt {
+    $$ = $2;
+  }
+  | select_stmt {
+    $$ = $1;
+  }
+
 create_table_stmt:    /*create table 语句的语法解析树*/
-    CREATE TABLE ID LBRACE attr_def attr_def_list RBRACE storage_format
+    CREATE TABLE id_maybe_keyword LBRACE attr_def attr_def_list RBRACE storage_format as_select
     {
       $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
       CreateTableSqlNode &create_table = $$->create_table;
@@ -408,8 +619,42 @@ create_table_stmt:    /*create table 语句的语法解析树*/
         create_table.storage_format = $8;
         free($8);
       }
+
+      if ($9 != nullptr) {
+        create_table.has_subquery = true;
+        create_table.subquery = $9;
+      } else {
+        create_table.has_subquery = false;
+        create_table.subquery = nullptr;
+      }
     }
-    ;
+    | CREATE TABLE id_maybe_keyword as_select {
+      $$ = new ParsedSqlNode(SCF_CREATE_TABLE);
+      CreateTableSqlNode &create_table = $$->create_table;
+      create_table.relation_name = $3;
+      free($3);
+      if ($4 != nullptr) {
+        create_table.has_subquery = true;
+        create_table.subquery = $4;
+      } else {
+        create_table.has_subquery = false;
+        create_table.subquery = nullptr;
+      }
+    }
+
+create_view_stmt:
+  CREATE VIEW id_maybe_keyword id_list AS select_stmt {
+    $$ = new ParsedSqlNode(SCF_CREATE_VIEW);
+    $$->create_view.view_name = $3;
+    free($3);
+    if ($4 != nullptr) {
+      $$->create_view.col_names.swap(*$4);
+      delete $4;
+    }
+    $$->create_view.selection = $6;
+    $$->create_view.sql_str = $6->sql_str;
+  }
+
 attr_def_list:
     /* empty */
     {
@@ -428,7 +673,7 @@ attr_def_list:
     ;
     
 attr_def:
-  ID type LBRACE number RBRACE nullable_spec
+  id_maybe_keyword type LBRACE number RBRACE nullable_spec
   {
     $$ = new AttrInfoSqlNode;
     $$->type = (AttrType)$2;
@@ -437,17 +682,19 @@ attr_def:
     $$->nullable = $6;
     free($1);
   }
-  | ID type nullable_spec
+  | id_maybe_keyword type nullable_spec
   {
     $$ = new AttrInfoSqlNode;
     $$->type = (AttrType)$2;
     $$->name = $1;
     if ((AttrType)$2 == AttrType::DATES) {
-    $$->length = 8;
+      $$->length = 8;
     } else if ((AttrType)$2 == AttrType::CHARS) {
-    $$->length = 32;
+      $$->length = 32;
+    } else if ((AttrType)$2 == AttrType::TEXTS) {
+      $$->length = LOB_OVERFLOW_THRESHOLD;
     } else {
-    $$->length = 4;
+      $$->length = 4;
     }
     $$->nullable = $3;
     free($1);
@@ -469,19 +716,33 @@ type:
     | FLOAT_T  { $$ = static_cast<int>(AttrType::FLOATS); }
     | VECTOR_T { $$ = static_cast<int>(AttrType::VECTORS); }
     | DATE_T   { $$ = static_cast<int>(AttrType::DATES); }
+    | TEXT_T   { $$ = static_cast<int>(AttrType::TEXTS); }
     ;
+
+insert_name_lists:
+  {
+    $$ = nullptr;
+  }
+  | LBRACE id_list RBRACE {
+    $$ = $2;
+  }
+
 insert_stmt:        /*insert   语句的语法解析树*/
-    INSERT INTO ID VALUES LBRACE value value_list RBRACE 
+    INSERT INTO id_maybe_keyword insert_name_lists VALUES LBRACE value value_list RBRACE 
     {
       $$ = new ParsedSqlNode(SCF_INSERT);
       $$->insertion.relation_name = $3;
-      if ($7 != nullptr) {
-        $$->insertion.values.swap(*$7);
-        delete $7;
+      if ($4 != nullptr) {
+        $$->insertion.insertion_names.swap(*$4);
+        delete $4;
       }
-      $$->insertion.values.emplace_back(*$6);
+      if ($8 != nullptr) {
+        $$->insertion.values.swap(*$8);
+        delete $8;
+      }
+      $$->insertion.values.emplace_back(*$7);
       std::reverse($$->insertion.values.begin(), $$->insertion.values.end());
-      delete $6;
+      delete $7;
       free($3);
     }
     ;
@@ -570,14 +831,14 @@ storage_format:
     {
       $$ = nullptr;
     }
-    | STORAGE FORMAT EQ ID
+    | STORAGE FORMAT EQ id_maybe_keyword
     {
       $$ = $4;
     }
     ;
     
 delete_stmt:    /*  delete 语句的语法解析树*/
-    DELETE FROM ID where 
+    DELETE FROM id_maybe_keyword where 
     {
       $$ = new ParsedSqlNode(SCF_DELETE);
       $$->deletion.relation_name = $3;
@@ -589,7 +850,7 @@ delete_stmt:    /*  delete 语句的语法解析树*/
     }
     ;
 update_stmt:      /*  update 语句的语法解析树*/
-  UPDATE ID SET set_clause_list where 
+  UPDATE id_maybe_keyword SET set_clause_list where 
   {
     $$ = new ParsedSqlNode(SCF_UPDATE);
     $$->update.relation_name = $2;
@@ -624,7 +885,7 @@ set_clause_list:
   ;
 
 set_clause:
-  ID EQ value {
+  id_maybe_keyword EQ value {
     $$ = new SetClauseSqlNode;
     $$->attribute_name = $1;
     $$->value = *$3;
@@ -633,7 +894,7 @@ set_clause:
     free($1);
     delete $3;
   }
-  | ID EQ LBRACE select_stmt RBRACE {
+  | id_maybe_keyword EQ LBRACE select_stmt RBRACE {
     $$ = new SetClauseSqlNode;
     $$->attribute_name = $1;
     $$->has_subquery = true;
@@ -642,9 +903,10 @@ set_clause:
   }
   ;
 select_stmt:        /*  select 语句的语法解析树*/
-    SELECT expression_list FROM rel_list join_list where group_by having order_by
+    SELECT expression_list FROM rel_list join_list where group_by having order_by limit
     {
       $$ = new ParsedSqlNode(SCF_SELECT);
+      $$->sql_str = token_name(sql_string, &@$);
       if ($2 != nullptr) {
         $$->selection.expressions.swap(*$2);
         delete $2;
@@ -690,6 +952,7 @@ select_stmt:        /*  select 语句的语法解析树*/
 				$$->selection.order_by.swap(*$9);
 				delete $9;
 			}
+      $$->selection.limits = $10;
 	}
 	;
 
@@ -729,9 +992,32 @@ order_by_item:
 		$$ = new OrderByItem;
 		$$->attr = *$1;
 		$$->asc = $2;
+    $$->expression = nullptr;
 		delete $1;
 	}
+  | L2_DISTANCE LBRACE expression COMMA expression RBRACE {
+    $$ = new OrderByItem;
+    $$->expression = create_arithmetic_expression(ArithmeticExpr::Type::L2_DIS, $3, $5, sql_string, &@$);
+  }
+  | COSINE_DISTANCE LBRACE expression COMMA expression RBRACE {
+    $$ = new OrderByItem;
+    $$->expression = create_arithmetic_expression(ArithmeticExpr::Type::COS_DIS, $3, $5, sql_string, &@$);
+  }
+  | INNER_PRODUCT LBRACE expression COMMA expression RBRACE {
+    $$ = new OrderByItem;
+    $$->expression = create_arithmetic_expression(ArithmeticExpr::Type::INN_PDT, $3, $5, sql_string, &@$);
+  }
 	;
+
+limit:
+  /* empty */
+  {
+    $$ = -1; // set to invalid number
+  }
+  | LIMIT NUMBER
+  {
+    $$ = $2;
+  }
 
 asc_desc:
 	/* empty */
@@ -763,6 +1049,20 @@ expression_list:
       $$ = new std::vector<std::unique_ptr<Expression>>;
       $$->emplace_back($1);
     }
+    | expression id_maybe_keyword {
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+      $$->back()->set_name($2);
+      $$->back()->set_aliased(true);
+      free($2);
+    }
+    | expression AS id_maybe_keyword {
+      $$ = new std::vector<std::unique_ptr<Expression>>;
+      $$->emplace_back($1);
+      $$->back()->set_name($3);
+      $$->back()->set_aliased(true);
+      free($3);
+    }
     | expression COMMA expression_list
     {
       if ($3 != nullptr) {
@@ -771,6 +1071,30 @@ expression_list:
         $$ = new std::vector<std::unique_ptr<Expression>>;
       }
       $$->emplace($$->begin(), $1);
+    }
+    | expression id_maybe_keyword COMMA expression_list
+    {
+      if ($4 != nullptr) {
+        $$ = $4;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+      $$->front()->set_name($2);
+      $$->front()->set_aliased(true);
+      free($2);
+    }
+    | expression AS id_maybe_keyword COMMA expression_list
+    {
+      if ($5 != nullptr) {
+        $$ = $5;
+      } else {
+        $$ = new std::vector<std::unique_ptr<Expression>>;
+      }
+      $$->emplace($$->begin(), $1);
+      $$->front()->set_name($3);
+      $$->front()->set_aliased(true);
+      free($3);
     }
     ;
 expression:
@@ -815,6 +1139,9 @@ expression:
     }
     | '*' {
       $$ = new StarExpr();
+    }
+    | id_maybe_keyword DOT '*' {
+      $$ = new StarExpr($1);
     }
     // your code here
     // 聚合函数
@@ -882,12 +1209,12 @@ agg_fun_attr:
     ;
 
 rel_attr:
-    ID {
+    id_maybe_keyword {
       $$ = new RelAttrSqlNode;
       $$->attribute_name = $1;
       free($1);
     }
-    | ID DOT ID {
+    | id_maybe_keyword DOT id_maybe_keyword {
       $$ = new RelAttrSqlNode;
       $$->relation_name  = $1;
       $$->attribute_name = $3;
@@ -897,25 +1224,42 @@ rel_attr:
     ;
 
 relation:
-    ID {
-      $$ = $1;
+    id_maybe_keyword {
+      $$ = new RelationSqlNode();
+      $$->name = $1;
+      $$->alias = "";
+      free($1);
+    }
+    | id_maybe_keyword id_maybe_keyword {
+      $$ = new RelationSqlNode();
+      $$->name = $1;
+      $$->alias = $2;
+      free($1);
+      free($2);
+    }
+    | id_maybe_keyword AS id_maybe_keyword {
+      $$ = new RelationSqlNode();
+      $$->name = $1;
+      $$->alias = $3;
+      free($1);
+      free($3);
     }
     ;
 rel_list:
     relation {
-      $$ = new std::vector<std::string>();
-      $$->push_back($1);
-      free($1);
+      $$ = new std::vector<RelationSqlNode>();
+      $$->push_back(*$1);
+      delete($1);
     }
     | relation COMMA rel_list {
       if ($3 != nullptr) {
         $$ = $3;
       } else {
-        $$ = new std::vector<std::string>;
+        $$ = new std::vector<RelationSqlNode>;
       }
 
-      $$->insert($$->begin(), $1);
-      free($1);
+      $$->insert($$->begin(), *$1);
+      delete($1);
     }
     ;
 
@@ -941,8 +1285,8 @@ join_list:
 
 join:
     INNER JOIN relation ON condition_list {
-      $$ = new std::tuple<std::string, std::vector<ConditionSqlNode> *>($3, $5);
-      free($3);
+      $$ = new std::tuple<std::string, std::vector<ConditionSqlNode> *>($3->name, $5);
+      delete $3;
     }
 
 where:
@@ -1172,7 +1516,7 @@ having:
     }
 
 load_data_stmt:
-    LOAD DATA INFILE SSS INTO TABLE ID 
+    LOAD DATA INFILE SSS INTO TABLE id_maybe_keyword 
     {
       char *tmp_file_name = common::substr($4, 1, strlen($4) - 2);
       
@@ -1193,7 +1537,7 @@ explain_stmt:
     ;
 
 set_variable_stmt:
-    SET ID EQ value
+    SET id_maybe_keyword EQ value
     {
       $$ = new ParsedSqlNode(SCF_SET_VARIABLE);
       $$->set_variable.name  = $2;

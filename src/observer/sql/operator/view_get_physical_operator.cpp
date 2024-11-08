@@ -1,0 +1,87 @@
+#include "sql/operator/view_get_physical_operator.h"
+#include "sql/expr/expression_tuple.h"
+
+RC ViewGetPhysicalOperator::open(Trx *trx) {
+  RC rc = RC::SUCCESS;
+  rc = children_[0]->open(trx);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to open child operator. rc=%s", strrc(rc));
+  }
+
+  return rc;
+}
+
+RC ViewGetPhysicalOperator::close() {
+  RC rc = children_[0]->close();
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to close child operator. rc=%s", strrc(rc));
+  }
+  return rc;
+}
+
+RC ViewGetPhysicalOperator::next() {
+  return children_[0]->next();
+}
+
+Tuple *ViewGetPhysicalOperator::current_tuple() {
+  Tuple *tuple = children_[0]->current_tuple();
+  std::vector<TupleCellSpec> specs;
+  std::vector<Value> cells;
+
+  int cell_num = tuple->cell_num();
+  for (int i = 0; i < cell_num; i++) {
+    TupleCellSpec spec;
+    tuple->spec_at(i, spec);
+    specs.push_back(spec);
+    Value cell;
+    tuple->cell_at(i, cell);
+    cells.push_back(cell);
+  }
+
+  if (!view_->is_lookup_map_set()) {
+    std::map<std::string, std::string> lookup_map;
+    for (int i = 0; i < cell_num; i++) {
+      lookup_map[view_->name() + "." + view_->col_names()[i]] = specs[i].alias();
+    }
+    view_->set_lookup_map(lookup_map);
+  }
+
+  tuple_.set_names(specs);
+  tuple_.set_cells(cells);
+
+  auto *expr_tuple = dynamic_cast<ExpressionTuple<std::unique_ptr<Expression>> *>(tuple);
+  if (expr_tuple != nullptr && expr_tuple->is_record_set()) {
+    tuple_.set_record(expr_tuple->record());
+  } else if (expr_tuple != nullptr && expr_tuple->is_joined_map_set()) {
+    tuple_.set_joined_tuple_map(expr_tuple->joined_map());
+  }
+
+  return &tuple_;
+}
+
+RC ViewGetPhysicalOperator::tuple_schema(TupleSchema &schema) const {
+  TupleSchema child_schema;
+  RC rc = children_[0]->tuple_schema(child_schema);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to get child schema. rc=%s", strrc(rc));
+  }
+
+  TupleSchema view_schema;
+  if (view_->is_field_col_trans_enabled()) {
+    int cell_num = child_schema.cell_num();
+    for (int i = 0; i < cell_num; i++) {
+      TupleCellSpec spec = child_schema.cell_at(i);
+      std::string view_alias;
+      rc = view_->field_to_col_lookup(spec.alias(), view_alias);
+      if (rc != RC::SUCCESS) {
+        return rc;
+      }
+      view_schema.append_cell(view_alias.c_str());
+    }
+    schema = view_schema;
+  } else {
+    schema = child_schema;
+  }
+
+  return rc;
+}

@@ -69,8 +69,10 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   // collect tables in `from` statement
   vector<Table *>                tables;
   unordered_map<string, Table *> table_map;
+  std::vector<bool>              is_aliased(select_sql.relations.size());
+  std::vector<std::string>       aliases(select_sql.relations.size());
   for (size_t i = 0; i < select_sql.relations.size(); i++) {
-    const char *table_name = select_sql.relations[i].c_str();
+    const char *table_name = select_sql.relations[i].name.c_str();
     if (nullptr == table_name) {
       LOG_WARN("invalid argument. relation name is null. index=%d", i);
       return RC::INVALID_ARGUMENT;
@@ -82,9 +84,20 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
       return RC::SCHEMA_TABLE_NOT_EXIST;
     }
 
+    if (!select_sql.relations[i].alias.empty() && table_map.count(select_sql.relations[i].alias) != 0) {
+      LOG_WARN("duplicate table alias. alias=%s", select_sql.relations[i].alias.c_str());
+      return RC::TABLE_ALIAS_DUPLICATE;
+    }
     binder_context.add_table(table);
     tables.push_back(table);
     table_map.insert({table_name, table});
+    if (!select_sql.relations[i].alias.empty()) {
+      table->set_alias(select_sql.relations[i].alias);
+      table_map.insert({select_sql.relations[i].alias, table});
+      binder_context.add_alias(select_sql.relations[i].alias, table);
+      is_aliased[i] = true;
+      aliases[i] = select_sql.relations[i].alias;
+    }
   }
 
   // 将join语句中的表也加入到tables和table_map中，依葫芦画瓢
@@ -286,6 +299,10 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
     order_by_stmt = new OrderByStmt(select_sql.order_by); 
   }
 
+  for (Table *t: tables) {
+    t->unset_alias();
+  }
+
   // everything alright
   SelectStmt *select_stmt = new SelectStmt();
 
@@ -297,6 +314,9 @@ RC SelectStmt::create(Db *db, SelectSqlNode &select_sql, Stmt *&stmt)
   select_stmt->having_filter_stmt_ = having_filter_stmt;
   select_stmt->subquery_stmt_ = subquery_stmt;
   select_stmt->order_by_ = order_by_stmt;
+  select_stmt->limits_    = select_sql.limits;
+  select_stmt->is_aliased_.swap(is_aliased);
+  select_stmt->aliases_.swap(aliases);
   stmt                      = select_stmt;
   return RC::SUCCESS;
 }

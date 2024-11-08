@@ -32,17 +32,26 @@ public:
 
   Table        *table() const { return table_; }
   ReadWriteMode read_write_mode() const { return mode_; }
+  bool          is_aliased() const { return is_aliased_; }
+  const std::string &alias() const { return alias_; }
+  void set_alias(const std::string &alias) { alias_ = alias; is_aliased_ = true; }
 
   void set_predicates(std::vector<std::unique_ptr<Expression>> &&exprs);
   auto predicates() -> std::vector<std::unique_ptr<Expression>> & { return predicates_; }
 
+  void set_limit(int limits) { limits_ = limits; }
+  int  limit() const { return limits_; }
+
 private:
   Table        *table_ = nullptr;
   ReadWriteMode mode_  = ReadWriteMode::READ_WRITE;
+  bool          is_aliased_ = false;
+  std::string   alias_;
 
   // 与当前表相关的过滤操作，可以尝试在遍历数据时执行
   // 这里的表达式都是比较简单的比较运算，并且左右两边都是取字段表达式或值表达式
   // 不包含复杂的表达式运算，比如加减乘除、或者conjunction expression
   // 如果有多个表达式，他们的关系都是 AND
   std::vector<std::unique_ptr<Expression>> predicates_;
+  int                                      limits_; // [ATT!] only for vector search index hit
 };

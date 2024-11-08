@@ -30,15 +30,20 @@ Table *BinderContext::find_table(const char *table_name) const
 {
   auto pred = [table_name](Table *table) { return 0 == strcasecmp(table_name, table->name()); };
   auto iter = ranges::find_if(query_tables_, pred);
-  if (iter == query_tables_.end()) {
-    return nullptr;
+  if (iter != query_tables_.end()) {
+    return *iter;
   }
-  return *iter;
+
+  if (alias_table_.find(std::string(table_name)) != alias_table_.end()) {
+    return alias_table_.at(std::string(table_name));
+  }
+
+  return nullptr;
 }
 
 Table *BinderContext::find_table_in_helper_tables(const char *table_name) const
 {
-  auto pred = [table_name](Table *table) { return 0 == strcasecmp(table_name, table->name()); };
+  auto pred = [table_name](Table *table) { return 0 == strcasecmp(table_name, table->name()) || 0 == strcasecmp(table_name, table->alias()); };
   auto iter = ranges::find_if(helper_tables_, pred);
   if (iter == helper_tables_.end()) {
     return nullptr;
@@ -47,16 +52,26 @@ Table *BinderContext::find_table_in_helper_tables(const char *table_name) const
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-static void wildcard_fields(Table *table, vector<unique_ptr<Expression>> &expressions)
+static void wildcard_fields(Table *table, vector<unique_ptr<Expression>> &expressions, std::string table_name)
 {
-  const TableMeta &table_meta = table->table_meta();
-  const int        field_num  = table_meta.field_num();
-  for (int i = table_meta.sys_field_num(); i < field_num; i++) {
-    Field      field(table, table_meta.field(i));
-    FieldExpr *field_expr = new FieldExpr(field);
-    // field_expr->set_name(field.field_name());
-    field_expr->set_name(table_meta.name() + std::string(".") + std::string(field.field_name()));
-    expressions.emplace_back(field_expr);
+  if (table->view() == nullptr) {
+    const TableMeta &table_meta = table->table_meta();
+    const int        field_num  = table_meta.field_num();
+    for (int i = table_meta.sys_field_num(); i < field_num; i++) {
+      Field      field(table, table_meta.field(i));
+      FieldExpr *field_expr = new FieldExpr(field);
+      field_expr->set_name(table_name+ std::string(".") + std::string(field.field_name()));
+      expressions.emplace_back(field_expr);
+    }
+  } else {
+    const View *view = table->view();
+    const int  field_num = view->field_num();
+    for (int i = 0; i < field_num; i++) {
+      Field      field(table, view->field(i));
+      FieldExpr *field_expr = new FieldExpr(field);
+      field_expr->set_name(table_name + std::string(".") + std::string(view->col_names()[i]));
+      expressions.emplace_back(field_expr);
+    }
   }
 }
 
@@ -134,6 +149,10 @@ RC ExpressionBinder::bind_star_expression(
     return RC::SUCCESS;
   }
 
+  if (expr->is_aliased()) {
+    return RC::ALIAS_STAR_EXPR;
+  }
+
   auto star_expr = static_cast<StarExpr *>(expr.get());
 
   vector<Table *> tables_to_wildcard;
@@ -152,8 +171,19 @@ RC ExpressionBinder::bind_star_expression(
     tables_to_wildcard.insert(tables_to_wildcard.end(), all_tables.begin(), all_tables.end());
   }
 
-  for (Table *table : tables_to_wildcard) {
-    wildcard_fields(table, bound_expressions);
+  int alias_names_idx = 0;
+  std::vector<std::string> alias_names = context_.get_alias();
+  std::vector<bool> is_aliased = context_.is_aliased();
+
+  for (size_t i = 0; i < tables_to_wildcard.size(); i++) {
+    Table *table_to_wildcard = tables_to_wildcard[i];
+    std::string wildcard_name;
+    if (is_aliased[i]) {
+      wildcard_name = alias_names[alias_names_idx++];
+    } else {
+      wildcard_name = table_to_wildcard->name();
+    }
+    wildcard_fields(tables_to_wildcard[i], bound_expressions, wildcard_name);
   }
 
   return RC::SUCCESS;
@@ -170,6 +200,7 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
   const char *table_name = unbound_field_expr->table_name();
   const char *field_name = unbound_field_expr->field_name();
+  bool is_aliased        = unbound_field_expr->is_aliased();
 
   Table *table = nullptr;
   if (is_blank(table_name)) {
@@ -192,9 +223,14 @@ RC ExpressionBinder::bind_unbound_field_expression(
   }
 
   if (0 == strcmp(field_name, "*")) {
-    wildcard_fields(table, bound_expressions);
+    wildcard_fields(table, bound_expressions, table_name);
   } else {
-    const FieldMeta *field_meta = table->table_meta().field(field_name);
+    const FieldMeta *field_meta = nullptr;
+    if (table->view() != nullptr) {
+      field_meta = table->view()->field(field_name);
+    } else {
+      field_meta = table->table_meta().field(field_name);
+    }
     if (nullptr == field_meta) {
       LOG_INFO("no such field in table: %s.%s", table_name, field_name);
       return RC::SCHEMA_FIELD_MISSING;
@@ -202,6 +238,7 @@ RC ExpressionBinder::bind_unbound_field_expression(
 
     Field      field(table, field_meta);
     FieldExpr *field_expr = new FieldExpr(field);
+    field_expr->set_aliased(is_aliased);
     // field_expr->set_name(field_name); // expression的测试用例显示应该展示完整的名字，而不只是field_name
     field_expr->set_name(unbound_field_expr->name());
     bound_expressions.emplace_back(field_expr);
@@ -525,11 +562,15 @@ RC ExpressionBinder::bind_subquery_expression(
     tables.push_back(table);
   }
   sub_stmt->set_tables(tables);
-  Stmt *sub_stmt_cast = reinterpret_cast<Stmt*>(sub_stmt);
-  Stmt::create_stmt(db_, *sub_sqlnode, sub_stmt_cast);
+  Stmt *sub_stmt_general = reinterpret_cast<Stmt*>(sub_stmt);
+  RC rc = Stmt::create_stmt(db_, *sub_sqlnode, sub_stmt_general);
+  if (rc != RC::SUCCESS) {
+    LOG_WARN("failed to create subquery stmt. rc=%s", strrc(rc));
+    return rc;
+  }
 
   // 生成新的表达式
-  BoundSubqueryExpr *bound_subquery_expr = new BoundSubqueryExpr(sub_stmt_cast);
+  BoundSubqueryExpr *bound_subquery_expr = new BoundSubqueryExpr(sub_stmt_general);
   bound_expressions.emplace_back(bound_subquery_expr);
 
   return RC::SUCCESS;

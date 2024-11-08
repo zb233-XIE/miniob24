@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include "net/plain_communicator.h"
 #include "common/io/io.h"
 #include "common/log/log.h"
+#include "common/rc.h"
 #include "event/session_event.h"
 #include "net/buffered_writer.h"
 #include "session/session.h"
@@ -37,7 +38,7 @@ RC PlainCommunicator::read_event(SessionEvent *&event)
   int data_len = 0;
   int read_len = 0;
 
-  const int    max_packet_size = 8192;
+  const int    max_packet_size = 67000;
   vector<char> buf(max_packet_size);
 
   // 持续接收消息，直到遇到'\0'。将'\0'遇到的后续数据直接丢弃没有处理，因为目前仅支持一收一发的模式
@@ -182,7 +183,9 @@ RC PlainCommunicator::write_result(SessionEvent *event, bool &need_disconnect)
       return rc;
     }
   }
-  writer_->flush();  // TODO handle error
+  if(OB_SUCC(rc)){
+    writer_->flush();  // TODO handle error
+  }
   return rc;
 }
 

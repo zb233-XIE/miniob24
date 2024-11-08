@@ -77,59 +77,69 @@ extern int yydebug;
     FLOAT_T = 283,
     VECTOR_T = 284,
     DATE_T = 285,
-    HELP = 286,
-    EXIT = 287,
-    DOT = 288,
-    INTO = 289,
-    VALUES = 290,
-    FROM = 291,
-    WHERE = 292,
-    AND = 293,
-    OR = 294,
-    SET = 295,
-    ON = 296,
-    LOAD = 297,
-    DATA = 298,
-    INFILE = 299,
-    EXPLAIN = 300,
-    STORAGE = 301,
-    FORMAT = 302,
-    EQ = 303,
-    LT = 304,
-    GT = 305,
-    LE = 306,
-    GE = 307,
-    NE = 308,
-    LK = 309,
-    NLK = 310,
-    IS_T = 311,
-    IS_NOT_T = 312,
-    MAX = 313,
-    MIN = 314,
-    COUNT = 315,
-    AVG = 316,
-    SUM = 317,
-    INNER = 318,
-    JOIN = 319,
-    UNIQUE = 320,
-    LBRACKET = 321,
-    RBRACKET = 322,
-    L2_DISTANCE = 323,
-    COSINE_DISTANCE = 324,
-    INNER_PRODUCT = 325,
-    EXISTS_T = 326,
-    NOT = 327,
-    IN_T = 328,
-    NULL_T = 329,
-    NOT_NULL_T = 330,
-    ORDER_BY = 331,
-    ASC = 332,
-    NUMBER = 333,
-    FLOAT = 334,
-    ID = 335,
-    SSS = 336,
-    DATE = 337,
-    UMINUS = 338
+    TEXT_T = 286,
+    HELP = 287,
+    EXIT = 288,
+    DOT = 289,
+    INTO = 290,
+    VALUES = 291,
+    FROM = 292,
+    WHERE = 293,
+    AND = 294,
+    OR = 295,
+    SET = 296,
+    ON = 297,
+    LOAD = 298,
+    DATA = 299,
+    INFILE = 300,
+    EXPLAIN = 301,
+    STORAGE = 302,
+    FORMAT = 303,
+    EQ = 304,
+    LT = 305,
+    GT = 306,
+    LE = 307,
+    GE = 308,
+    NE = 309,
+    LK = 310,
+    NLK = 311,
+    IS_T = 312,
+    IS_NOT_T = 313,
+    MAX = 314,
+    MIN = 315,
+    COUNT = 316,
+    AVG = 317,
+    SUM = 318,
+    INNER = 319,
+    JOIN = 320,
+    UNIQUE = 321,
+    LBRACKET = 322,
+    RBRACKET = 323,
+    WITH = 324,
+    DISTANCE = 325,
+    TYPE = 326,
+    LISTS = 327,
+    PROBES = 328,
+    IVFFLAT = 329,
+    L2_DISTANCE = 330,
+    COSINE_DISTANCE = 331,
+    INNER_PRODUCT = 332,
+    EXISTS_T = 333,
+    NOT = 334,
+    IN_T = 335,
+    VIEW = 336,
+    NULL_T = 337,
+    NOT_NULL_T = 338,
+    ORDER_BY = 339,
+    ASC = 340,
+    AS = 341,
+    LIMIT = 342,
+    NUMBER = 343,
+    FLOAT = 344,
+    ID = 345,
+    SSS = 346,
+    DATE = 347,
+    UMINUS = 348
   };
 #endif
 
@@ -137,7 +147,7 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 162 "yacc_sql.y"
+#line 174 "yacc_sql.y"
 
   ParsedSqlNode *                            sql_node;
   ConditionSqlNode *                         condition;
@@ -147,6 +157,7 @@ union YYSTYPE
   SetClauseSqlNode *                         set_clause;
   std::vector<AttrInfoSqlNode> *             attr_infos;
   AttrInfoSqlNode *                          attr_info;
+  RelationSqlNode *                          relation;
   Expression *                               expression;
   std::vector<std::unique_ptr<Expression>> * expression_list;
   // std::vector<Expression *> *                agg_fun_attr_list;
@@ -157,17 +168,20 @@ union YYSTYPE
   std::tuple<std::vector<std::string> *, std::vector<std::vector<ConditionSqlNode> *> *> *  join_tuple_list;
   std::tuple<std::string, std::vector<ConditionSqlNode> *> *  join_tuple;
   std::vector<RelAttrSqlNode> *              rel_attr_list;
-  std::vector<std::string> *                 relation_list;
+  std::vector<RelationSqlNode> *             relation_list;
   std::vector<SetClauseSqlNode> *            set_clause_list;
   std::vector<float> *                       vector_elem_list;
+  std::vector<std::string> *                 id_list;
   char *                                     string;
   int                                        number;
   float                                      floats;
   char *                                     date;
   bool                                       nullable_spec;
   bool                                       asc_desc;
+  VecIndexFieldAnno                          vec_index_param;
+  std::vector<VecIndexFieldAnno> *           vec_index_param_list;
 
-#line 171 "yacc_sql.hpp"
+#line 185 "yacc_sql.hpp"
 
 };
 typedef union YYSTYPE YYSTYPE;

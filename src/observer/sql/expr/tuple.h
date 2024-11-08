@@ -175,7 +175,7 @@ public:
 
   void set_record(Record *record) { this->record_ = record; }
 
-  void set_schema(const Table *table, const std::vector<FieldMeta> *fields)
+  void set_schema(const Table *table, const std::vector<FieldMeta> *fields, bool is_aliased = false, std::string alias = "")
   {
     table_ = table;
     // fix:join当中会多次调用右表的open,open当中会调用set_scheme，从而导致tuple当中会存储
@@ -186,7 +186,11 @@ public:
     this->speces_.clear();
     this->speces_.reserve(fields->size());
     for (const FieldMeta &field : *fields) {
-      speces_.push_back(new FieldExpr(table, &field));
+      FieldExpr *field_expr = new FieldExpr(table, &field);
+      if (is_aliased) {
+        field_expr->set_name(alias + "." + field.name());
+      }
+      speces_.push_back(field_expr);
     }
   }
 
@@ -204,6 +208,9 @@ public:
     cell.set_type(field_meta->type());
     char* data = this->record_->data() + field_meta->offset();
     int len = field_meta->len();
+    if(cell.attr_type() == AttrType::TEXTS){
+      cell.set_type(AttrType::CHARS);
+    }
     if(field_meta->type() == AttrType::VECTORS){
       len /= sizeof(float);
     }
@@ -211,9 +218,16 @@ public:
 
     // check if cell is null
     if (field_meta->nullable()) {
-      uint8_t *null_flag = (uint8_t *)(this->record_->data() + field_meta->offset());
-      if (*null_flag == NULL_MAGIC_NUMBER) {
-        cell.set_null();
+      uint8_t *null_char_flag = (uint8_t *)(this->record_->data() + field_meta->offset());
+      uint32_t *null_int_flag = (uint32_t *)(this->record_->data() + field_meta->offset());
+      if (field_meta->type() == AttrType::CHARS) {
+        if (*null_char_flag == NULL_CHAR_MAGIC_NUMBER) {
+          cell.set_null();
+        }
+      } else {
+        if (*null_int_flag == NULL_INT_MAGIC_NUMER) {
+          cell.set_null();
+        }
       }
     }
 
@@ -224,6 +238,7 @@ public:
   {
     const Field &field = speces_[index]->field();
     spec               = TupleCellSpec(table_->name(), field.field_name());
+    spec.set_alias2(speces_[index]->name());
     return RC::SUCCESS;
   }
 
@@ -260,6 +275,8 @@ public:
   Record &record() { return *record_; }
 
   const Record &record() const { return *record_; }
+
+  std::string table_name() const { return table_->name(); }
 
 private:
   Record                  *record_ = nullptr;
@@ -339,6 +356,9 @@ public:
 
   void set_names(const std::vector<TupleCellSpec> &specs) { specs_ = specs; }
   void set_cells(const std::vector<Value> &cells) { cells_ = cells; }
+  void set_record(const Record &record) { record_ = record; record_set_ = true; }
+  Record record() const { return record_; }
+  bool is_record_set() const { return record_set_; }
 
   virtual int cell_num() const override { return static_cast<int>(cells_.size()); }
 
@@ -398,9 +418,31 @@ public:
     return RC::SUCCESS;
   }
 
+  void set_joined_tuple_map(const std::map<std::string, Record> &joined_tuple_map)
+  {
+    joined_tuple_map_set_ = true;
+    joined_tuple_map_       = joined_tuple_map;
+  }
+
+  bool is_joined_map_set() const { return joined_tuple_map_set_; }
+  RC lookup_joined_map(const std::string &key, Record &record) const
+  {
+    auto it = joined_tuple_map_.find(key);
+    if (it == joined_tuple_map_.end()) {
+      return RC::NOTFOUND;
+    }
+
+    record = it->second;
+    return RC::SUCCESS;
+  }
+
 private:
   std::vector<Value>         cells_;
   std::vector<TupleCellSpec> specs_;
+  bool                       record_set_ = false;
+  Record                     record_;
+  bool                       joined_tuple_map_set_ = false;
+  std::map<std::string, Record> joined_tuple_map_;
 };
 
 /**
@@ -417,6 +459,9 @@ public:
 
   void set_left(Tuple *left) { left_ = left; }
   void set_right(Tuple *right) { right_ = right; }
+
+  const Tuple *get_left() const { return left_; }
+  const Tuple *get_right() const { return right_; }
 
   int cell_num() const override { return left_->cell_num() + right_->cell_num(); }
 

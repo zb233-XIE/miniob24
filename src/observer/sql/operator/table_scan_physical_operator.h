@@ -37,12 +37,20 @@ public:
   PhysicalOperatorType type() const override { return PhysicalOperatorType::TABLE_SCAN; }
 
   RC open(Trx *trx) override;
+  
+  /**
+   * @brief 对于含有大对象的表，返回的是元组中含完整的大对象字段
+  */
   RC next() override;
   RC close() override;
 
   Tuple *current_tuple() override;
 
   void set_predicates(std::vector<std::unique_ptr<Expression>> &&exprs);
+
+  void set_alias(const std::string &alias) { alias_ = alias; is_aliased_ = true; }
+  bool is_aliased() const { return is_aliased_; }
+  const std::string &alias() const { return alias_; }
 
 private:
   RC filter(RowTuple &tuple, bool &result);
@@ -55,4 +63,6 @@ private:
   Record                                   current_record_;
   RowTuple                                 tuple_;
   std::vector<std::unique_ptr<Expression>> predicates_;  // TODO chang predicate to table tuple filter
+  bool is_aliased_ = false;
+  std::string alias_;
 };

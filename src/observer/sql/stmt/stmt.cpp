@@ -14,8 +14,10 @@ See the Mulan PSL v2 for more details. */
 
 #include "sql/stmt/stmt.h"
 #include "common/log/log.h"
+#include "sql/parser/parse_defs.h"
 #include "sql/stmt/calc_stmt.h"
 #include "sql/stmt/create_index_stmt.h"
+#include "sql/stmt/create_vector_index_stmt.h"
 #include "sql/stmt/create_table_stmt.h"
 #include "sql/stmt/delete_stmt.h"
 #include "sql/stmt/desc_table_stmt.h"
@@ -31,6 +33,7 @@ See the Mulan PSL v2 for more details. */
 #include "sql/stmt/trx_begin_stmt.h"
 #include "sql/stmt/trx_end_stmt.h"
 #include "sql/stmt/update_stmt.h"
+#include "sql/stmt/create_view_stmt.h"
 
 bool stmt_type_ddl(StmtType type)
 {
@@ -73,8 +76,16 @@ RC Stmt::create_stmt(Db *db, ParsedSqlNode &sql_node, Stmt *&stmt)
       return CreateIndexStmt::create(db, sql_node.create_index, stmt);
     }
 
+    case SCF_CREATE_VECTOR_INDEX: {
+      return CreateVectorIndexStmt::create(db, sql_node.create_vector_index, stmt);
+    }
+
     case SCF_CREATE_TABLE: {
       return CreateTableStmt::create(db, sql_node.create_table, stmt);
+    }
+
+    case SCF_CREATE_VIEW: {
+      return CreateViewStmt::create(db, sql_node.create_view, stmt);
     }
 
     case SCF_DROP_TABLE: {

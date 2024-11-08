@@ -27,7 +27,32 @@ public:
   ExpressionTuple(const std::vector<ExprPointerType> &expressions) : expressions_(expressions) {}
   virtual ~ExpressionTuple() = default;
 
-  void set_tuple(const Tuple *tuple) { child_tuple_ = tuple; }
+  void set_tuple(const Tuple *tuple) {
+    child_tuple_ = tuple;
+    const RowTuple *row_tuple = dynamic_cast<const RowTuple *>(tuple);
+    if (row_tuple != nullptr) {
+      record_ = row_tuple->record();
+      record_set_ = true;
+      return;
+    }
+
+    const JoinedTuple *joined_tuple = dynamic_cast<const JoinedTuple *>(tuple);
+    if (joined_tuple != nullptr) {
+      joined_tuple_record_map_set_ = true;
+      set_joined_tuple_map_recur(joined_tuple, joined_tuple_record_map_);
+    }
+  }
+
+  bool is_joined_map_set() const { return joined_tuple_record_map_set_; }
+  auto joined_map() const -> const std::map<std::string, Record> & { return joined_tuple_record_map_; }
+  RC lookup_joined_map(const std::string &table_name, Record &record) const {
+    auto it = joined_tuple_record_map_.find(table_name);
+    if (it != joined_tuple_record_map_.end()) {
+      record = it->second;
+      return RC::SUCCESS;
+    }
+    return RC::NOTFOUND;
+  }
 
   int cell_num() const override { return static_cast<int>(expressions_.size()); }
 
@@ -73,6 +98,8 @@ public:
     return rc;
   }
 
+  bool is_record_set() const { return record_set_; }
+  const Record &record() const { return record_; }
 private:
   RC get_value(const ExprPointerType &expression, Value &value) const
   {
@@ -85,7 +112,25 @@ private:
     return rc;
   }
 
+  void set_joined_tuple_map_recur(const Tuple *tuple, std::map<std::string, Record> &map) {
+    const RowTuple *row_tuple = dynamic_cast<const RowTuple *>(tuple);
+    if (row_tuple != nullptr) {
+      map[row_tuple->table_name()] = row_tuple->record();
+      return;
+    }
+
+    const JoinedTuple *joined_tuple = dynamic_cast<const JoinedTuple *>(tuple);
+    if (joined_tuple != nullptr) {
+      set_joined_tuple_map_recur(joined_tuple->get_left(), map);
+      set_joined_tuple_map_recur(joined_tuple->get_right(), map);
+    }
+  }
 private:
   const std::vector<ExprPointerType> &expressions_;
   const Tuple                        *child_tuple_ = nullptr;
+  bool                               record_set_ = false;
+  Record                             record_;
+
+  bool                               joined_tuple_record_map_set_;
+  std::map<std::string, Record>      joined_tuple_record_map_;  // table_name -> record
 };

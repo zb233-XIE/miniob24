@@ -73,7 +73,7 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
   switch (type) {
     case AttrType::INTS: {
       int res = atoi(val.get_string().c_str());
-      result = Value((int)res);
+      result = Value(int(res));
       break;
     }
     case AttrType::FLOATS: {
@@ -89,6 +89,17 @@ RC CharType::cast_to(const Value &val, AttrType type, Value &result) const
         LOG_INFO("%s: not a valid string representation of vector", src);
         return RC::INVALID_ARGUMENT;
       }
+    } break;
+    case AttrType::TEXTS: {
+      // to avoid data copy, directly copy pointer & length
+      // but set own_data to false
+      // memory management is not result[out]'s job
+      result.reset();
+      result.attr_type_ = val.attr_type_;
+      result.value_ = val.value_;
+      result.length_ = val.length_;
+      result.own_data_ = false;
+      return RC::SUCCESS;
     } break;
     default: return RC::UNSUPPORTED;
   }
@@ -119,7 +130,8 @@ RC CharType::to_string(const Value &val, string &result) const
   }
 
   stringstream ss;
-  ss << val.value_.pointer_value_;
-  result = ss.str();
+  int len = 0;
+  while(len < val.length_ && *(val.value_.pointer_value_ + len) != '\0') len++;
+  result = string(val.value_.pointer_value_, len);
   return RC::SUCCESS;
 }

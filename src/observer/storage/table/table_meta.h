@@ -45,12 +45,16 @@ public:
 
 public:
   int32_t             table_id() const { return table_id_; }
+  bool                contain_lob_field() const { return contain_lob_ ; }
   const char         *name() const;
   const FieldMeta    *trx_field() const;
   const FieldMeta    *field(int index) const;
+  const FieldMeta    *out_field(int index) const;
   const FieldMeta    *field(const char *name) const;
+  const FieldMeta    *out_field(const char *name) const;
   const FieldMeta    *find_field_by_offset(int offset) const;
-  auto                field_metas() const -> const std::vector<FieldMeta>                *{ return &fields_; }
+  auto                field_metas() const -> const std::vector<FieldMeta>            *{ return &fields_; }
+  auto                output_field_metas() const -> const std::vector<FieldMeta>     *{ return &output_fields_; }
   auto                trx_fields() const -> std::span<const FieldMeta>;
   const StorageFormat storage_format() const { return storage_format_; }
 
@@ -63,6 +67,7 @@ public:
   int              index_num() const;
 
   int record_size() const;
+  int output_record_size() const;
 
 public:
   int  serialize(std::ostream &os) const override;
@@ -75,9 +80,12 @@ protected:
   int32_t                table_id_ = -1;
   std::string            name_;
   std::vector<FieldMeta> trx_fields_;
-  std::vector<FieldMeta> fields_;  // 包含sys_fields
+  std::vector<FieldMeta> fields_;        // 包含sys_fields
+  std::vector<FieldMeta> output_fields_; // 解决含大对象字段导致的存入与读出格式不一致
   std::vector<IndexMeta> indexes_;
   StorageFormat          storage_format_;
+  bool                   contain_lob_ = false;   // 是否包含大对象
 
   int record_size_ = 0;
+  int output_record_size_ = 0;
 };
