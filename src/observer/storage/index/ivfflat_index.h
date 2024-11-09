@@ -54,6 +54,7 @@ public:
   void generate();
   void setup();
   RC   insert_entry(const char *record, const RID *rid) override;
+  RC   insert_entry_mvcc(const char *record, const RID *rid, Trx *trx) override { return RC::UNIMPLEMENTED; }
   RC   delete_entry(const char *record, const RID *rid) override { return RC::UNIMPLEMENTED; };
 
   IndexScanner *create_scanner(const char *left_key, int left_len, bool left_inclusive, const char *right_key,
