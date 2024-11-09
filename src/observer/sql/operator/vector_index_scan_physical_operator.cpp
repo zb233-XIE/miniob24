@@ -13,8 +13,11 @@ See the Mulan PSL v2 for more details. */
 //
 
 #include "sql/operator/vector_index_scan_physical_operator.h"
+#include "common/rc.h"
 #include "common/type/data_type.h"
+#include "sql/expr/tuple.h"
 #include "storage/index/index.h"
+#include "storage/index/ivfflat_index.h"
 #include "storage/trx/trx.h"
 
 VectorIndexScanPhysicalOperator::VectorIndexScanPhysicalOperator(
@@ -24,109 +27,51 @@ VectorIndexScanPhysicalOperator::VectorIndexScanPhysicalOperator(
 
 RC VectorIndexScanPhysicalOperator::open(Trx *trx)
 {
-  // if (nullptr == table_ || nullptr == index_) {
-  //   return RC::INTERNAL;
-  // }
-
-  // IndexScanner *index_scanner = index_->create_scanner(left_value_.data(),
-  //     left_value_.length(),
-  //     left_inclusive_,
-  //     right_value_.data(),
-  //     right_value_.length(),
-  //     right_inclusive_);
-  // if (nullptr == index_scanner) {
-  //   LOG_WARN("failed to create index scanner");
-  //   return RC::INTERNAL;
-  // }
-
-  // record_handler_ = table_->record_handler();
-  // if (nullptr == record_handler_) {
-  //   LOG_WARN("invalid record handler");
-  //   index_scanner->destroy();
-  //   return RC::INTERNAL;
-  // }
-  // index_scanner_ = index_scanner;
-
-  // tuple_.set_schema(table_, table_->table_meta().field_metas());
-
-  // trx_ = trx;
+  if (nullptr == table_ || nullptr == index_) {
+    return RC::INTERNAL;
+  }
+  record_handler_ = table_->record_handler();
+  if (nullptr == record_handler_) {
+    LOG_WARN("invalid record handler");
+    return RC::INTERNAL;
+  }
+  tuple_.set_schema(table_, table_->table_meta().output_field_metas());
+  trx_ = trx;
   return RC::SUCCESS;
 }
 
 RC VectorIndexScanPhysicalOperator::next()
 {
-  return RC::UNIMPLEMENTED;
-  // RID rid;
-  // RC  rc = RC::SUCCESS;
+  if (!ann_searched_) {
+    record_rids_  = dynamic_cast<IvfflatIndex *>(index_)->ann_search(feature_vector_, limits_);
+    ann_searched_ = true;
+  }
 
-  // bool filter_result = false;
-  // while (RC::SUCCESS == (rc = index_scanner_->next_entry(&rid))) {
-  //   rc = record_handler_->get_record(rid, current_record_);
-  //   if (OB_FAIL(rc)) {
-  //     LOG_TRACE("failed to get record. rid=%s, rc=%s", rid.to_string().c_str(), strrc(rc));
-  //     return rc;
-  //   }
-
-  //   LOG_TRACE("got a record. rid=%s", rid.to_string().c_str());
-
-  //   tuple_.set_record(&current_record_);
-  //   rc = filter(tuple_, filter_result);
-  //   if (OB_FAIL(rc)) {
-  //     LOG_TRACE("failed to filter record. rc=%s", strrc(rc));
-  //     return rc;
-  //   }
-
-  //   if (!filter_result) {
-  //     LOG_TRACE("record filtered");
-  //     continue;
-  //   }
-
-  //   rc = trx_->visit_record(table_, current_record_, mode_);
-  //   if (rc == RC::RECORD_INVISIBLE) {
-  //     LOG_TRACE("record invisible");
-  //     continue;
-  //   } else {
-  //     return rc;
-  //   }
-  // }
-
-  // return rc;
+  if (++cur_index_ >= static_cast<int>(record_rids_.size())) {
+    return RC::RECORD_EOF;
+  }
+  RID current_rid = record_rids_[cur_index_];
+  RC  rc          = record_handler_->get_record(current_rid, current_record_);
+  if (OB_FAIL(rc)) {
+    LOG_TRACE("failed to get record. rid=%s, rc=%s", current_rid.to_string().c_str(), strrc(rc));
+    return rc;
+  }
+  rc = trx_->visit_record(table_, current_record_, mode_);
+  if (rc == RC::RECORD_INVISIBLE) {
+    LOG_TRACE("record invisible");
+  }
+  return rc;
 }
 
 RC VectorIndexScanPhysicalOperator::close()
 {
-  // index_scanner_->destroy();
-  // index_scanner_ = nullptr;
   return RC::SUCCESS;
 }
 
 Tuple *VectorIndexScanPhysicalOperator::current_tuple()
 {
-  return nullptr;
-  // tuple_.set_record(&current_record_);
-  // return &tuple_;
-}
-
-RC VectorIndexScanPhysicalOperator::filter(RowTuple &tuple, bool &result)
-{
-  return RC::UNIMPLEMENTED;
-  // RC    rc = RC::SUCCESS;
-  // Value value;
-  // for (std::unique_ptr<Expression> &expr : predicates_) {
-  //   rc = expr->get_value(tuple, value);
-  //   if (rc != RC::SUCCESS) {
-  //     return rc;
-  //   }
-
-  //   bool tmp_result = value.get_boolean();
-  //   if (!tmp_result) {
-  //     result = false;
-  //     return rc;
-  //   }
-  // }
-
-  // result = true;
-  // return rc;
+  tuple_.set_record(&current_record_);
+  return &tuple_;
 }
 
 std::string VectorIndexScanPhysicalOperator::param() const
