@@ -1,6 +1,8 @@
 #ifndef KMEANS_H
 #define KMEANS_H
 
+#include <functional>
+
 #include "sql/parser/parse_defs.h"
 
 class Kmeans
