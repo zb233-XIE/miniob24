@@ -287,11 +287,11 @@ protected:
   DiskBufferPool  *disk_buffer_pool_ = nullptr;  ///< 当前操作的buffer pool(文件)
   RecordLogHandler log_handler_;                 ///< 当前操作的日志处理器
   Frame *frame_ = nullptr;  ///< 当前操作页面关联的frame(frame的更多概念可以参考buffer pool和frame)
-  ReadWriteMode rw_mode_     = ReadWriteMode::READ_WRITE;  ///< 当前的操作是否都是只读的
-  PageHeader   *page_header_ = nullptr;                    ///< 当前页面上页面头
+  ReadWriteMode       rw_mode_         = ReadWriteMode::READ_WRITE;  ///< 当前的操作是否都是只读的
+  PageHeader         *page_header_     = nullptr;                    ///< 当前页面上页面头
   LargeObjPageHeader *lob_page_header_ = nullptr;
-  char         *bitmap_      = nullptr;  ///< 当前页面上record分配状态信息bitmap内存起始位置
-  StorageFormat storage_format_;
+  char               *bitmap_          = nullptr;  ///< 当前页面上record分配状态信息bitmap内存起始位置
+  StorageFormat       storage_format_;
 
 protected:
   friend class RecordPageIterator;
@@ -445,7 +445,7 @@ public:
 
   /**
    * @brief 删除大对象字段
-  */
+   */
   RC delete_lob_field(PageNum first_page_num);
 
   /**
@@ -483,6 +483,12 @@ public:
   RC recover_insert_record(const char *data, int record_size, const RID &rid);
 
   RC get_record(const RID &rid, Record &record);
+
+  /**
+   * @brief 对于含有大对象字段的table，修改record成为完整的字段
+   *  按照题目要求，没有考虑大对象溢出的情况
+   */
+  RC expand_lob_fields(Record &record);
 
   RC visit_record(const RID &rid, function<bool(Record &)> updater);
 

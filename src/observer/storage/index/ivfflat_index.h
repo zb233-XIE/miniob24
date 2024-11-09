@@ -61,7 +61,7 @@ public:
   {
     return nullptr;
   }
-  RC sync() override { return RC::UNIMPLEMENTED; };
+  RC sync() override { return RC::SUCCESS; };
 
 private:
   bool                 inited_                  = false;
