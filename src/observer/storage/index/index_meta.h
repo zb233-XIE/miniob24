@@ -37,13 +37,15 @@ public:
   IndexMeta() = default;
 
   RC init(const char *name, const std::vector<FieldMeta> &fields, bool unique,
-      DISTANCE_ALGO distance_algorithm = DISTANCE_ALGO::NONE);
+      DISTANCE_ALGO distance_algorithm = DISTANCE_ALGO::NONE, int centroids = -1, int probes = -1);
 
 public:
   const char               *name() const;
   const std::vector<string> fields() const;
   bool                      unique() const;
   DISTANCE_ALGO             alrgorithm() const;
+  int                       centroids() const;
+  int                       probes() const;
 
   void desc(ostream &os) const;
 
@@ -52,8 +54,11 @@ public:
   static RC from_json(const TableMeta &table, const Json::Value &json_value, IndexMeta &index);
 
 protected:
-  string              name_;                // index's name
-  std::vector<string> fields_;              // fields' name
-  bool                unique_;              // unique index
-  DISTANCE_ALGO       distance_algorithm_;  // for vector type index
+  string              name_;    // index's name
+  std::vector<string> fields_;  // fields' name
+  bool                unique_;  // unique index
+  // for vector type index
+  DISTANCE_ALGO distance_algorithm_;
+  int           centroids_;
+  int           probes_;
 };

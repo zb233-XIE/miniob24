@@ -47,15 +47,17 @@ private:
   RC filter(RowTuple &tuple, bool &result);
 
 private:
-  Trx               *trx_ [[maybe_unused]]            = nullptr;
-  Table             *table_ [[maybe_unused]]          = nullptr;
-  Index             *index_ [[maybe_unused]]          = nullptr;
-  ReadWriteMode      mode_ [[maybe_unused]]           = ReadWriteMode::READ_WRITE;
-  IndexScanner      *index_scanner_ [[maybe_unused]]  = nullptr;
-  RecordFileHandler *record_handler_ [[maybe_unused]] = nullptr;
+  Trx               *trx_            = nullptr;
+  Table             *table_          = nullptr;
+  Index             *index_          = nullptr;
+  ReadWriteMode      mode_           = ReadWriteMode::READ_WRITE;
+  RecordFileHandler *record_handler_ = nullptr;
 
-  Record   current_record_ [[maybe_unused]];
-  RowTuple tuple_ [[maybe_unused]];
-  Value    feature_vector_ [[maybe_unused]];
-  int      limits_ [[maybe_unused]];
+  Record      current_record_;
+  RowTuple    tuple_;
+  Value       feature_vector_;
+  int         limits_;
+  bool        ann_searched_ = false;
+  int         cur_index_    = -1;
+  vector<RID> record_rids_;
 };

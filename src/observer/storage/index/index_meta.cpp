@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/log/log.h"
 #include "sql/parser/parse_defs.h"
 #include "storage/field/field_meta.h"
+#include "storage/index/index.h"
 #include "storage/table/table_meta.h"
 #include "json/json.h"
 
@@ -24,18 +25,22 @@ const static Json::StaticString FIELD_NAME("name");
 const static Json::StaticString FIELD_FIELD_NAME("field_name");
 const static Json::StaticString FIELD_UNIQUE("unique");
 const static Json::StaticString FIELD_ALGORITHM("distance_algorithm");
+const static Json::StaticString FIELD_CENTROIDS("centroids");
+const static Json::StaticString FIELD_PROBES("probes");
 
-RC IndexMeta::init(
-    const char *name, const std::vector<FieldMeta> &field_metas, bool unique, DISTANCE_ALGO distance_algorithm)
+RC IndexMeta::init(const char *name, const std::vector<FieldMeta> &field_metas, bool unique,
+    DISTANCE_ALGO distance_algorithm, int centroids, int probes)
 {
   if (common::is_blank(name)) {
     LOG_ERROR("Failed to init index, name is empty.");
     return RC::INVALID_ARGUMENT;
   }
 
-  name_   = name;
-  unique_ = unique;
+  name_               = name;
+  unique_             = unique;
   distance_algorithm_ = distance_algorithm;
+  centroids_          = centroids;
+  probes_             = probes;
   for (const FieldMeta &field : field_metas) {
     fields_.push_back(field.name());
   }
@@ -51,14 +56,18 @@ void IndexMeta::to_json(Json::Value &json_value) const
   }
   json_value[FIELD_UNIQUE]    = unique_;
   json_value[FIELD_ALGORITHM] = static_cast<int>(distance_algorithm_);
+  json_value[FIELD_CENTROIDS] = centroids_;
+  json_value[FIELD_PROBES] = probes_;
 }
 
 RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, IndexMeta &index)
 {
-  const Json::Value &name_value   = json_value[FIELD_NAME];
-  const Json::Value &fields_value = json_value[FIELD_FIELD_NAME];
-  const Json::Value &unique_value = json_value[FIELD_UNIQUE];
+  const Json::Value &name_value      = json_value[FIELD_NAME];
+  const Json::Value &fields_value    = json_value[FIELD_FIELD_NAME];
+  const Json::Value &unique_value    = json_value[FIELD_UNIQUE];
   const Json::Value &algorithm_value = json_value[FIELD_ALGORITHM];
+  const Json::Value &centroids_value = json_value[FIELD_CENTROIDS];
+  const Json::Value &probes_value = json_value[FIELD_PROBES];
 
   if (!name_value.isString()) {
     LOG_ERROR("Index name is not a string. json value=%s", name_value.toStyledString().c_str());
@@ -77,9 +86,21 @@ RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, I
     return RC::INTERNAL;
   }
 
-  if(!algorithm_value.isInt()){
-    LOG_ERROR("Distance algorithm flag of index [%s] is not an integer. json value=%s",
+  if (!algorithm_value.isInt()) {
+    LOG_ERROR("Distance algorithm flag of vector index [%s] is not an integer. json value=%s",
         name_value.asCString(), algorithm_value.toStyledString().c_str());
+    return RC::INTERNAL;
+  }
+
+  if (!centroids_value.isInt()) {
+    LOG_ERROR("Centroids of vector index [%s] is not an integer. json value=%s",
+        name_value.asCString(), centroids_value.toStyledString().c_str());
+    return RC::INTERNAL;
+  }
+
+  if (!probes_value.isInt()) {
+    LOG_ERROR("Distance algorithm flag of index [%s] is not an integer. json value=%s",
+        name_value.asCString(), probes_value.toStyledString().c_str());
     return RC::INTERNAL;
   }
 
@@ -99,7 +120,13 @@ RC IndexMeta::from_json(const TableMeta &table, const Json::Value &json_value, I
     field_metas.push_back(*field);
   }
 
-  return index.init(name_value.asCString(), field_metas, unique_value.asBool(), static_cast<DISTANCE_ALGO>(algorithm_value.asInt()));
+  return index.init(
+      name_value.asCString(), 
+      field_metas, 
+      unique_value.asBool(),
+      static_cast<DISTANCE_ALGO>(algorithm_value.asInt()),
+      centroids_value.asInt(),
+      probes_value.asInt());
 }
 
 const char *IndexMeta::name() const { return name_.c_str(); }
@@ -109,6 +136,9 @@ const std::vector<string> IndexMeta::fields() const { return fields_; }
 bool IndexMeta::unique() const { return unique_; }
 
 DISTANCE_ALGO IndexMeta::alrgorithm() const { return distance_algorithm_; }
+
+int IndexMeta::centroids() const { return centroids_; }
+int IndexMeta::probes() const { return probes_; }
 
 void IndexMeta::desc(std::ostream &os) const
 {

@@ -35,6 +35,7 @@ See the Mulan PSL v2 for more details. */
 #include "storage/index/bplus_tree_index.h"
 #include "storage/index/index.h"
 #include "storage/index/index_meta.h"
+#include "storage/index/ivfflat_index.h"
 #include "storage/record/record.h"
 #include "storage/record/record_manager.h"
 #include "storage/table/table.h"
@@ -606,22 +607,51 @@ RC Table::create_vector_index(
   }
 
   IndexMeta new_index_meta;
-  RC        rc = new_index_meta.init(index_name, vector<FieldMeta>{field_meta}, false, algorithm);
+  RC        rc = new_index_meta.init(index_name, vector<FieldMeta>{field_meta}, false, algorithm, centroids, probes);
   if (rc != RC::SUCCESS) {
     LOG_INFO("Failed to init vector IndexMeta in table:%s, index_name:%s, field_name:%s", 
              name(), index_name, field_meta.name());
     return rc;
   }
 
-  BplusTreeIndex *index      = new BplusTreeIndex();
+  IvfflatIndex *index      = new IvfflatIndex();
   string          index_file = table_index_file(base_dir_.c_str(), name(), index_name);
-  rc                         = index->create(this, index_file.c_str(), new_index_meta, std::vector<FieldMeta>{field_meta});
+  rc                         = index->create(this, index_file.c_str(), new_index_meta, field_meta);
   if (rc != RC::SUCCESS) {
     delete index;
-    LOG_ERROR("Failed to create bplus tree index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
+    LOG_ERROR("Failed to create ivfflat index. file name=%s, rc=%d:%s", index_file.c_str(), rc, strrc(rc));
     return rc;
   }
-  // checkpoint 1: do nothing, only update meta data
+
+  // insert all data into index
+  RecordFileScanner scanner;
+  rc = get_record_scanner(scanner, trx, ReadWriteMode::READ_ONLY);
+  if(rc != RC::SUCCESS){
+    LOG_WARN("failed to create scanner while creating index. table=%s, index=%s, rc=%s", 
+             name(), index_name, strrc(rc));
+    return rc;
+  }
+
+  Record record;
+  while (OB_SUCC(rc = scanner.next(record))) {
+    rc = index->insert_entry(record.data(), &record.rid());
+    if (rc != RC::SUCCESS) {
+      LOG_WARN("failed to insert record into index while creating index. table=%s, index=%s, rc=%s",
+               name(), index_name, strrc(rc));
+      return rc;
+    }
+  }
+  if (RC::RECORD_EOF == rc) {
+    rc = RC::SUCCESS;
+  } else {
+    LOG_WARN("failed to insert record into index while creating index. table=%s, index=%s, rc=%s",
+             name(), index_name, strrc(rc));
+    return rc;
+  }
+  scanner.close_scan();
+  LOG_INFO("inserted all records into new index. table=%s, index=%s", name(), index_name);
+  index->generate();
+  
   indexes_.push_back(index);
 
   // update table meta file
