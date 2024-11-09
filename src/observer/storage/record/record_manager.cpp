@@ -28,6 +28,7 @@ See the Mulan PSL v2 for more details. */
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <utility>
 
 using namespace common;
 
@@ -1027,6 +1028,48 @@ RC RecordFileHandler::get_record(const RID &rid, Record &record)
 
   record.copy_data(inplace_record.data(), inplace_record.len());
   record.set_rid(rid);
+  expand_lob_fields(record);
+  return rc;
+}
+
+RC RecordFileHandler::expand_lob_fields(Record &record)
+{
+  RC rc = RC::SUCCESS;
+  if (table_meta_->contain_lob_field()) {
+    const char *data = record.data();
+
+    int         normal_field_start_index = table_meta_->sys_field_num();
+    int         normal_field_count       = table_meta_->field_num() - normal_field_start_index;
+
+    int current_offset       = 0;
+    int output_record_offset = 0;
+
+    Record real_record;
+    real_record.new_record(table_meta_->output_record_size());
+    char *output_data = real_record.data();
+
+    for (int i = 0; i < normal_field_count; i++) {
+      const auto *field     = table_meta_->field(i + normal_field_start_index);
+      const auto *out_field = table_meta_->out_field(i + normal_field_start_index);
+      ASSERT(current_offset == field->offset(), "");
+
+      int copy_len = field->len();
+      if (field->type() == AttrType::TEXTS || field->type() == AttrType::VECTORS) {
+        copy_len -= sizeof(PageNum);
+      }
+      memcpy(output_data + output_record_offset, data + current_offset, copy_len);
+      if (field->type() == AttrType::TEXTS || field->type() == AttrType::VECTORS) {
+        // check the last four bytes
+        const char *lob_field_data = data + current_offset + field->len() - sizeof(PageNum);
+        PageNum     overflow_page  = *reinterpret_cast<const PageNum *>(lob_field_data);
+        ASSERT(overflow_page == BP_INVALID_PAGE_NUM, "");
+      }
+      output_record_offset += out_field->len();
+      current_offset += field->len();
+    }
+    ASSERT(output_record_offset == table_meta_->output_record_size(), "");
+    record = std::move(real_record);
+  }
   return rc;
 }
 
